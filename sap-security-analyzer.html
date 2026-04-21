@@ -1,0 +1,1928 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>SAP Security Analyzer v3.0</title>
+
+  <!-- React 18 + Babel (JSX in browser) -->
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.23.5/babel.min.js"></script>
+
+  <!-- jsPDF + AutoTable for PDF export -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
+
+  <style>
+
+@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&family=Mulish:wght@300;400;500;600;700&display=swap');
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#06090f;--bg2:#0b1120;--bg3:#111928;--bg4:#182033;--bg5:#1f2a3e;
+  --bd:#1e2d44;--bd2:#253450;--bd3:#2d3f5c;
+  --txt:#dde8f4;--txt2:#8aa0bc;--txt3:#4d6280;--txt4:#2d405e;
+  --cyan:#00d4ff;--cyan2:#67e8f9;--cyan3:rgba(0,212,255,0.12);
+  --red:#f04040;--red2:#fca5a5;--orange:#f97316;--orange2:#fdba74;
+  --yellow:#f5c542;--yellow2:#fde68a;--green:#10c98a;--green2:#6ee7b7;
+  --blue:#3b82f6;--purple:#a855f7;
+  --font:'Mulish',system-ui,sans-serif;--mono:'IBM Plex Mono',monospace;--display:'Syne',sans-serif;
+  --radius:10px;--radius-lg:16px;
+}
+html,body{background:var(--bg);font-family:var(--font);color:var(--txt);line-height:1.5}
+::-webkit-scrollbar{width:5px;height:5px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--bd2);border-radius:4px}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+@keyframes shimmer{0%{background-position:-200% 0}100%{background-position:200% 0}}
+@keyframes scaleIn{from{opacity:0;transform:scale(.97)}to{opacity:1;transform:scale(1)}}
+.spin-icon{animation:spin 1s linear infinite}
+.fade-up{animation:fadeUp .3s ease forwards}
+.scale-in{animation:scaleIn .25s ease forwards}
+.pulse{animation:pulse 2s ease-in-out infinite}
+input,textarea,select{font-family:var(--mono);background:var(--bg3);border:1px solid var(--bd2);color:var(--txt);border-radius:var(--radius);padding:9px 12px;font-size:12px;outline:none;transition:border-color .15s,box-shadow .15s;width:100%}
+input:focus,textarea:focus,select:focus{border-color:var(--cyan);box-shadow:0 0 0 3px rgba(0,212,255,.1)}
+button{font-family:var(--font);cursor:pointer;border:none;transition:all .15s}
+.tag{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:700;font-family:var(--mono);letter-spacing:.04em;white-space:nowrap}
+
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel" data-presets="react">
+    const { useState, useEffect, useRef, useCallback } = React;
+
+
+/* ═══════════════════════════════════════════════════════════════════
+   INLINE SVG ICON FACTORY
+═══════════════════════════════════════════════════════════════════ */
+const Ic = ({ d, size = 16, cls = "", sw = 1.75 }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none"
+    stroke="currentColor" strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round" className={cls}>
+    {(Array.isArray(d) ? d : [d]).map((p, i) => <path key={i} d={p} />)}
+  </svg>
+);
+const Icons = {
+  Shield:   (p) => <Ic {...p} d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>,
+  Server:   (p) => <Ic {...p} d={["M4 2h16a2 2 0 012 2v4a2 2 0 01-2 2H4a2 2 0 01-2-2V4a2 2 0 012-2z","M4 12h16a2 2 0 012 2v4a2 2 0 01-2 2H4a2 2 0 01-2-2v-4a2 2 0 012-2z","M8 6h.01M8 18h.01"]}/>,
+  Play:     (p) => <Ic {...p} d="M5 3l14 9-14 9V3z"/>,
+  BarChart: (p) => <Ic {...p} d={["M18 20V10","M12 20V4","M6 20v-6"]}/>,
+  Key:      (p) => <Ic {...p} d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 11-7.778 7.778 5.5 5.5 0 017.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/>,
+  Clock:    (p) => <Ic {...p} d={["M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z","M12 6v6l4 2"]}/>,
+  Users:    (p) => <Ic {...p} d={["M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2","M9 11a4 4 0 100-8 4 4 0 000 8z","M23 21v-2a4 4 0 00-3-3.87","M16 3.13a4 4 0 010 7.75"]}/>,
+  Settings: (p) => <Ic {...p} d={["M12 15a3 3 0 100-6 3 3 0 000 6z","M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"]}/>,
+  Lock:     (p) => <Ic {...p} d={["M19 11H5a2 2 0 00-2 2v7a2 2 0 002 2h14a2 2 0 002-2v-7a2 2 0 00-2-2z","M7 11V7a5 5 0 0110 0v4"]}/>,
+  Alert:    (p) => <Ic {...p} d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0zM12 9v4M12 17h.01"/>,
+  Check:    (p) => <Ic {...p} d="M20 6L9 17l-5-5"/>,
+  X:        (p) => <Ic {...p} d="M18 6L6 18M6 6l12 12"/>,
+  ChevD:    (p) => <Ic {...p} d="M6 9l6 6 6-6"/>,
+  ChevU:    (p) => <Ic {...p} d="M18 15l-6-6-6 6"/>,
+  Plus:     (p) => <Ic {...p} d="M12 5v14M5 12h14"/>,
+  Trash:    (p) => <Ic {...p} d={["M3 6h18","M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"]}/>,
+  Edit:     (p) => <Ic {...p} d={["M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7","M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"]}/>,
+  Save:     (p) => <Ic {...p} d={["M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z","M17 21v-8H7v8","M7 3v5h8"]}/>,
+  Eye:      (p) => <Ic {...p} d={["M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z","M12 15a3 3 0 100-6 3 3 0 000 6z"]}/>,
+  EyeOff:   (p) => <Ic {...p} d={["M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19m-6.72-1.07a3 3 0 11-4.24-4.24","M1 1l22 22"]}/>,
+  Download: (p) => <Ic {...p} d={["M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4","M7 10l5 5 5-5","M12 15V3"]}/>,
+  DB:       (p) => <Ic {...p} d={["M12 2a9 3 0 019 3 9 3 0 01-9 3 9 3 0 01-9-3 9 3 0 019-3z","M3 5v4c0 1.657 4.03 3 9 3s9-1.343 9-3V5","M3 9v4c0 1.657 4.03 3 9 3s9-1.343 9-3V9","M3 13v4c0 1.657 4.03 3 9 3s9-1.343 9-3v-4"]}/>,
+  Wifi:     (p) => <Ic {...p} d={["M5 12.55a11 11 0 0114.08 0","M1.42 9a16 16 0 0121.16 0","M8.53 16.11a6 6 0 016.95 0","M12 20h.01"]}/>,
+  Bug:      (p) => <Ic {...p} d={["M8 2l1.88 1.88","M14.12 3.88L16 2","M9 7.13v-1a3.003 3.003 0 116 0v1","M12 20c-3.3 0-6-2.7-6-6v-3a4 4 0 014-4h4a4 4 0 014 4v3c0 3.3-2.7 6-6 6z","M12 20v-9","M6.53 9C4.6 8.8 3 7.1 3 5","M6 13H2","M3 21c0-2.1 1.7-3.9 3.8-4","M20.97 5c0 2.1-1.6 3.8-3.5 4","M22 13h-4","M17.2 17c2.1.1 3.8 1.9 3.8 4"]}/>,
+  Table:    (p) => <Ic {...p} d={["M9 3H5a2 2 0 00-2 2v4m6-6h10a2 2 0 012 2v4M9 3v18m0 0h10a2 2 0 002-2V9M9 21H5a2 2 0 01-2-2V9m0 0h18"]}/>,
+  Flame:    (p) => <Ic {...p} d="M8.5 14.5A2.5 2.5 0 0011 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 11-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 002.5 2.5z"/>,
+  List:     (p) => <Ic {...p} d={["M8 6h13","M8 12h13","M8 18h13","M3 6h.01","M3 12h.01","M3 18h.01"]}/>,
+  Sliders:  (p) => <Ic {...p} d={["M4 21v-7","M4 10V3","M12 21v-9","M12 8V3","M20 21v-5","M20 12V3","M1 14h6","M9 8h6","M17 16h6"]}/>,
+  Copy:     (p) => <Ic {...p} d={["M20 9H11a2 2 0 00-2 2v9a2 2 0 002 2h9a2 2 0 002-2v-9a2 2 0 00-2-2z","M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"]}/>,
+  Filter:   (p) => <Ic {...p} d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"/>,
+  Refresh:  (p) => <Ic {...p} d={["M23 4v6h-6","M1 20v-6h6","M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"]}/>,
+  PDF:      (p) => <Ic {...p} d={["M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z","M14 2v6h6","M9 15h6","M9 11h6","M9 18h4"]}/>,
+  Toggle:   (p) => <Ic {...p} d={["M10 12a2 2 0 100-4 2 2 0 000 4z","M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"]}/>,
+  Loader:   (p) => <Ic {...p} d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" cls="spin-icon"/>,
+  Info:     (p) => <Ic {...p} d={["M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z","M12 8h.01","M11 12h1v4h1"]}/>,
+};
+
+/* ═══════════════════════════════════════════════════════════════════
+   CSS
+═══════════════════════════════════════════════════════════════════ */
+
+/* ═══════════════════════════════════════════════════════════════════
+   SEVERITY THEME
+═══════════════════════════════════════════════════════════════════ */
+const SEV = {
+  CRITICAL:{ bg:"rgba(240,64,64,.09)", bd:"rgba(240,64,64,.3)",  txt:"#f04040", badge:"rgba(240,64,64,.15)", btxt:"#fca5a5" },
+  HIGH:    { bg:"rgba(249,115,22,.08)",bd:"rgba(249,115,22,.28)",txt:"#f97316", badge:"rgba(249,115,22,.15)",btxt:"#fdba74" },
+  MEDIUM:  { bg:"rgba(245,197,66,.07)",bd:"rgba(245,197,66,.22)",txt:"#f5c542", badge:"rgba(245,197,66,.15)",btxt:"#fde68a" },
+  WARN:    { bg:"rgba(245,197,66,.07)",bd:"rgba(245,197,66,.22)",txt:"#f5c542", badge:"rgba(245,197,66,.15)",btxt:"#fde68a" },
+  LOW:     { bg:"rgba(16,201,138,.06)",bd:"rgba(16,201,138,.2)", txt:"#10c98a", badge:"rgba(16,201,138,.12)",btxt:"#6ee7b7" },
+  PASS:    { bg:"rgba(16,201,138,.06)",bd:"rgba(16,201,138,.2)", txt:"#10c98a", badge:"rgba(16,201,138,.12)",btxt:"#6ee7b7" },
+  FAIL:    { bg:"rgba(249,115,22,.08)",bd:"rgba(249,115,22,.28)",txt:"#f97316", badge:"rgba(249,115,22,.15)",btxt:"#fdba74" },
+  INFO:    { bg:"rgba(59,130,246,.07)", bd:"rgba(59,130,246,.25)",txt:"#3b82f6", badge:"rgba(59,130,246,.15)",btxt:"#93c5fd" },
+};
+const s = (k) => SEV[k] || SEV.INFO;
+const SevTag = ({ v, sm }) => {
+  const c = s(v);
+  return <span className="tag" style={{ background:c.badge, color:c.btxt, border:`1px solid ${c.bd}`, fontSize:sm?9:10, padding:sm?"1px 6px":"2px 9px" }}>{v}</span>;
+};
+
+/* ═══════════════════════════════════════════════════════════════════
+   DEFAULT CONTROLS CONFIG
+═══════════════════════════════════════════════════════════════════ */
+const DEFAULT_CONTROLS = [
+  {
+    id:"dormant", name:"Dormant Users", desc:"Users with no login activity exceeding threshold period",
+    table:"USR02", fields:"BNAME,TRDAT,USTYP,GLTGB", entity:"DormantUsersSet", cat:"User Management",
+    severity:"HIGH", enabled:true, builtIn:true,
+    conditions:[{ field:"TRDAT", op:"older_than", value:"90", unit:"days", label:"Last login older than 90 days" }],
+    sapNote:"2034492", benchmark:"SAP Security Baseline v1.8 §3.1",
+    resultKey:"dormantUsers",
+    columns:["userId","name","dept","type","lastLogin","days","locked"],
+    colLabels:["User ID","Full Name","Department","Type","Last Login","Days Inactive","Locked"],
+  },
+  {
+    id:"password", name:"Password Age Violations", desc:"Users whose passwords exceed the maximum age policy",
+    table:"USR02", fields:"BNAME,PWDLGNDATE,USTYP", entity:"PasswordAgeSet", cat:"User Management",
+    severity:"HIGH", enabled:true, builtIn:true,
+    conditions:[{ field:"PWDLGNDATE", op:"older_than", value:"90", unit:"days", label:"Password not changed in 90 days" }],
+    sapNote:"863610", benchmark:"SAP Security Baseline v1.8 §3.2",
+    resultKey:"passwordAge",
+    columns:["userId","name","type","lastChange","days","mustChange"],
+    colLabels:["User ID","Full Name","Type","Last Changed","Age (Days)","Must Change"],
+  },
+  {
+    id:"params", name:"Security Profile Parameters", desc:"SAP system profile parameters vs SAP Security Baseline",
+    table:"PAHI/RZ11", fields:"PARNAME,PARVAL", entity:"SecurityParamsSet", cat:"System Config",
+    severity:"FAIL", enabled:true, builtIn:true,
+    conditions:[{ field:"PARVAL", op:"not_equal", value:"SAP_BASELINE", label:"Parameter deviates from SAP baseline" }],
+    sapNote:"2034492", benchmark:"SAP Security Baseline v1.8 §2",
+    resultKey:"securityParams",
+    columns:["cat","param","desc","current","recommended","status"],
+    colLabels:["Category","Parameter","Description","Current","Recommended","Status"],
+  },
+  {
+    id:"criticalAuths", name:"Critical Authorizations", desc:"Users with SAP_ALL, SAP_NEW or equivalent critical profiles",
+    table:"AGR_USERS/USR12", fields:"BNAME,AGR_NAME,UDATE,GLTGB", entity:"CriticalAuthSet", cat:"Authorizations",
+    severity:"CRITICAL", enabled:true, builtIn:true,
+    conditions:[{ field:"AGR_NAME", op:"contains", value:"SAP_ALL,SAP_NEW,S_A.ADMIN", label:"Assigned critical composite profile" }],
+    sapNote:"1484597", benchmark:"SAP Security Baseline v1.8 §4.1",
+    resultKey:"criticalAuths",
+    columns:["userId","name","profile","tcode","risk","validTo","justification"],
+    colLabels:["User ID","Full Name","Profile","T-Codes","Risk","Valid To","Justification"],
+  },
+  {
+    id:"defaultUsers", name:"Default & Standard Users", desc:"SAP-delivered users not locked or with unchanged default passwords",
+    table:"USR02/USGRP", fields:"BNAME,GLTGB,USTYP", entity:"DefaultUsersSet", cat:"User Management",
+    severity:"CRITICAL", enabled:true, builtIn:true,
+    conditions:[
+      { field:"BNAME", op:"equals", value:"SAP*,DDIC,EARLYWATCH,TMSADM,SAPCPIC", label:"Default SAP user present" },
+      { field:"locked", op:"equals", value:"false", label:"User is not locked" },
+    ],
+    sapNote:"2216306", benchmark:"SAP Security Baseline v1.8 §3.3",
+    resultKey:"defaultUsers",
+    columns:["userId","name","client","locked","pwdDefault","risk","note"],
+    colLabels:["User ID","Description","Client(s)","Locked","Default Pwd","Risk","Finding"],
+  },
+  {
+    id:"sodConflicts", name:"SoD Conflicts", desc:"Segregation of Duties violations including SOX-relevant conflicts",
+    table:"AGR_1251/SMEN_BUFFC", fields:"BNAME,LOW,HIGH,OBJECT", entity:"SoDConflictsSet", cat:"Authorizations",
+    severity:"CRITICAL", enabled:true, builtIn:true,
+    conditions:[{ field:"conflict_matrix", op:"match", value:"SoD_RULESET_V2", label:"Matches SoD conflict ruleset" }],
+    sapNote:"1490023", benchmark:"SAP GRC Access Control / ISACA COBIT",
+    resultKey:"sodConflicts",
+    columns:["userId","name","conflict","auth1","auth2","risk","soxRelevant"],
+    colLabels:["User ID","Full Name","SoD Conflict","Auth 1","Auth 2","Risk","SOX"],
+  },
+  {
+    id:"debugAccess", name:"Debug Access in Production", desc:"S_DEVELOP with ACTVT=02 in production — allows runtime program modification",
+    table:"AGR_USERS/S_DEVELOP", fields:"BNAME,ACTVT", entity:"DebugAccessSet", cat:"Authorizations",
+    severity:"CRITICAL", enabled:true, builtIn:true,
+    conditions:[{ field:"S_DEVELOP.ACTVT", op:"equals", value:"02", label:"S_DEVELOP activity = 02 (Change) in PROD" }],
+    sapNote:"1554667", benchmark:"SAP Security Baseline v1.8 §4.2",
+    resultKey:"debugAccess",
+    columns:["userId","name","env","auth","actvt","risk","justification"],
+    colLabels:["User ID","Full Name","Environment","Auth Object","Activity","Risk","Justification"],
+  },
+  {
+    id:"sensitiveTableAccess", name:"Sensitive Table Access", desc:"Direct S_TABU_DIS access to payroll, FI and user master tables",
+    table:"S_TABU_DIS", fields:"BNAME,DICBERCLS,ACTVT", entity:"SensTableSet", cat:"Authorizations",
+    severity:"HIGH", enabled:true, builtIn:true,
+    conditions:[{ field:"DICBERCLS", op:"contains", value:"SS,SC,&NC", label:"Sensitive table class with change access" }],
+    sapNote:"1539539", benchmark:"SAP Security Baseline v1.8 §4.3",
+    resultKey:"sensitiveTableAccess",
+    columns:["userId","name","table","activity","auth","risk"],
+    colLabels:["User ID","Full Name","Table","Access Type","Auth Object","Risk"],
+  },
+  {
+    id:"rfcSecurity", name:"RFC Destination Security", desc:"RFC connections with stored credentials, no auth, or plain HTTP",
+    table:"RFCDES/SM59", fields:"RFCDEST,RFCTYPE,RFCHOST,RFCSAMEUSR", entity:"RFCSecuritySet", cat:"Network/RFC",
+    severity:"HIGH", enabled:true, builtIn:true,
+    conditions:[
+      { field:"RFCSAMEUSR", op:"equals", value:"N", label:"Not using current user context" },
+      { field:"auth_type", op:"equals", value:"stored_password,none", label:"Stored password or no authentication" },
+    ],
+    sapNote:"1682316", benchmark:"SAP Security Baseline v1.8 §6.1",
+    resultKey:"rfcSecurity",
+    columns:["dest","type","host","logonType","user","risk","note"],
+    colLabels:["Destination","Type","Target Host","Auth Method","User","Risk","Finding"],
+  },
+  {
+    id:"clientSettings", name:"Client Security Settings", desc:"Production client open for direct changes bypassing transport system",
+    table:"T000/SCC4", fields:"MANDT,CCCORACTIV,CCCOPYLOCK", entity:"ClientSettingsSet", cat:"System Config",
+    severity:"HIGH", enabled:true, builtIn:true,
+    conditions:[{ field:"CCCORACTIV", op:"not_equal", value:"0", label:"Client change option != No Changes Allowed" }],
+    sapNote:"861377", benchmark:"SAP Security Baseline v1.8 §5.1",
+    resultKey:"clientSettings",
+    columns:["client","desc","changeMode","catt","transportRoute","risk"],
+    colLabels:["Client","Description","Change Mode","CATT/eCATT","TMS Route","Risk"],
+  },
+  {
+    id:"failedLogins", name:"Failed Login Attempts", desc:"High failed login counts indicating brute-force or credential stuffing",
+    table:"USR02/SM21", fields:"BNAME,TRFAILCOUNT,TRFAILTM", entity:"FailedLoginsSet", cat:"Monitoring",
+    severity:"HIGH", enabled:true, builtIn:true,
+    conditions:[{ field:"TRFAILCOUNT", op:"greater_than", value:"5", label:"Failed login attempts > 5" }],
+    sapNote:"Note 2015449", benchmark:"SAP Security Baseline v1.8 §3.4",
+    resultKey:"failedLogins",
+    columns:["userId","name","attempts","lastAttempt","srcIP","locked","risk"],
+    colLabels:["User ID","Full Name","Attempts","Last Attempt","Source IP","Locked","Risk"],
+  },
+  {
+    id:"firefighter", name:"Firefighter / Emergency Access", desc:"Standing or perpetual GRC firefighter access without time limit",
+    table:"AGR_USERS/GRAC_*", fields:"BNAME,AGR_NAME,GLTGB,ELTGB", entity:"FirefighterSet", cat:"GRC/Emergency",
+    severity:"HIGH", enabled:true, builtIn:true,
+    conditions:[{ field:"GLTGB", op:"equals", value:"9999-12-31", label:"Validity to = 9999-12-31 (perpetual)" }],
+    sapNote:"2476344", benchmark:"SAP GRC 12.0 Access Control",
+    resultKey:"firefighter",
+    columns:["userId","name","ffRole","validFrom","validTo","reason","risk"],
+    colLabels:["User ID","Full Name","FF Role","Valid From","Valid To","Reason","Risk"],
+  },
+  {
+    id:"license", name:"License Assignment Review", desc:"Users with over-assigned or mismatched SAP license types",
+    table:"USR41_MLD/USMM", fields:"BNAME,LIC_PTYPE,TRDAT", entity:"LicenseSet", cat:"Licensing",
+    severity:"WARN", enabled:true, builtIn:true,
+    conditions:[{ field:"usage_vs_license", op:"mismatch", value:"license_matrix_v3", label:"Actual usage below assigned license tier" }],
+    sapNote:"N/A", benchmark:"SAP Licensing Policy 2024",
+    resultKey:"licenseAssignment",
+    columns:["userId","name","license","lastActive","modules","cost","rec"],
+    colLabels:["User ID","Full Name","License","Last Active","Modules Used","Cost/mo","Recommendation"],
+  },
+];
+
+/* ═══════════════════════════════════════════════════════════════════
+   MOCK DATA
+═══════════════════════════════════════════════════════════════════ */
+const MOCK = {
+  dormantUsers:[
+    {userId:"JSMITH",  name:"John Smith",        dept:"Finance",    type:"Dialog",  lastLogin:"2024-08-12",days:249,locked:false},
+    {userId:"MWILSON", name:"Mary Wilson",        dept:"HR",         type:"Dialog",  lastLogin:"2024-07-03",days:289,locked:false},
+    {userId:"TESTUSER",name:"Test User 1",         dept:"IT",         type:"Dialog",  lastLogin:"2023-12-01",days:503,locked:false},
+    {userId:"BATCHJOB",name:"Batch Process",       dept:"BASIS",      type:"System",  lastLogin:"2024-06-15",days:307,locked:false},
+    {userId:"RGARCIA", name:"Rosa Garcia",         dept:"Procurement",type:"Dialog",  lastLogin:"2024-09-01",days:229,locked:false},
+    {userId:"OLD_RFC", name:"RFC Service",         dept:"BASIS",      type:"Service", lastLogin:"2023-08-10",days:616,locked:false},
+    {userId:"EXTCON1", name:"Ext Contractor",      dept:"Logistics",  type:"Dialog",  lastLogin:"2024-05-20",days:333,locked:false},
+  ],
+  passwordAge:[
+    {userId:"ADMIN",   name:"System Admin",  type:"Dialog",  lastChange:"2023-06-01",days:687,mustChange:false},
+    {userId:"JDOE",    name:"Jane Doe",       type:"Dialog",  lastChange:"2024-05-10",days:343,mustChange:false},
+    {userId:"KPATEL",  name:"Kiran Patel",    type:"Dialog",  lastChange:"2024-08-20",days:241,mustChange:false},
+    {userId:"SUPPORT1",name:"Support User",   type:"Dialog",  lastChange:"2023-11-15",days:520,mustChange:false},
+    {userId:"RTHOMAS", name:"Rachel Thomas",  type:"Dialog",  lastChange:"2024-10-01",days:199,mustChange:false},
+    {userId:"SYSMON",  name:"System Monitor", type:"Service", lastChange:"2022-03-10",days:1105,mustChange:false},
+  ],
+  securityParams:[
+    {param:"login/min_password_lng",         current:"6",   recommended:"8",    status:"FAIL",cat:"Password", desc:"Minimum password length"},
+    {param:"login/password_expiration_time", current:"180", recommended:"90",   status:"FAIL",cat:"Password", desc:"Password expiry (days)"},
+    {param:"login/min_password_specials",    current:"0",   recommended:"1",    status:"FAIL",cat:"Password", desc:"Min special characters"},
+    {param:"login/min_password_digits",      current:"0",   recommended:"1",    status:"FAIL",cat:"Password", desc:"Min digits in password"},
+    {param:"login/fails_to_user_lock",       current:"10",  recommended:"5",    status:"FAIL",cat:"Lockout",  desc:"Failed attempts before lock"},
+    {param:"login/failed_user_auto_unlock",  current:"1",   recommended:"0",    status:"FAIL",cat:"Lockout",  desc:"Auto-unlock after midnight"},
+    {param:"login/disable_multi_gui_login",  current:"0",   recommended:"1",    status:"FAIL",cat:"Session",  desc:"Prevent concurrent logins"},
+    {param:"rdisp/gui_auto_logout",          current:"0",   recommended:"3600", status:"FAIL",cat:"Session",  desc:"GUI auto-logout (seconds)"},
+    {param:"auth/rfc_authority_check",       current:"1",   recommended:"1",    status:"PASS",cat:"RFC",      desc:"RFC authority checks active"},
+    {param:"login/no_automatic_user_sapstar",current:"1",   recommended:"1",    status:"PASS",cat:"Defaults", desc:"SAP* auto-login disabled"},
+    {param:"login/password_change_for_SSO",  current:"0",   recommended:"1",    status:"FAIL",cat:"SSO",      desc:"Force pwd change after SSO"},
+    {param:"snc/enable",                     current:"0",   recommended:"1",    status:"WARN",cat:"Network",  desc:"Secure Network Comm (SNC)"},
+    {param:"icm/security_log",               current:"2",   recommended:"2",    status:"PASS",cat:"Logging",  desc:"ICM security log level"},
+    {param:"rec/client",                     current:"OFF", recommended:"ALL",  status:"FAIL",cat:"Logging",  desc:"Workload recording scope"},
+    {param:"rsau/enable",                    current:"1",   recommended:"1",    status:"PASS",cat:"Audit",    desc:"Security audit log active"},
+    {param:"rsau/max_diskspace/local",       current:"1000",recommended:"2000", status:"WARN",cat:"Audit",    desc:"Audit log max disk (MB)"},
+    {param:"login/password_history_size",    current:"3",   recommended:"5",    status:"WARN",cat:"Password", desc:"Password history entries"},
+    {param:"icm/https/verify_client",        current:"0",   recommended:"1",    status:"FAIL",cat:"Network",  desc:"HTTPS client cert verify"},
+    {param:"auth/object_disabling_active",   current:"N",   recommended:"N",    status:"PASS",cat:"Auth",     desc:"Auth object disabling inactive"},
+    {param:"login/accept_sso2_ticket",       current:"1",   recommended:"0",    status:"WARN",cat:"SSO",      desc:"Accept SSO2 tickets"},
+  ],
+  criticalAuths:[
+    {userId:"ADMIN",   name:"System Admin",  profile:"SAP_ALL",    tcode:"*",         risk:"CRITICAL",validTo:"9999-12-31",justification:"None on file"},
+    {userId:"JSMITH",  name:"John Smith",    profile:"SAP_NEW",    tcode:"*",         risk:"CRITICAL",validTo:"9999-12-31",justification:"None on file"},
+    {userId:"BASISUSR",name:"Basis Admin",   profile:"S_A.ADMIN",  tcode:"SM59,SM50", risk:"HIGH",    validTo:"9999-12-31",justification:"Approved 2022"},
+    {userId:"DEVUSER", name:"Dev User",      profile:"S_DEVELOP",  tcode:"SE38,SE80", risk:"HIGH",    validTo:"9999-12-31",justification:"Dev system"},
+    {userId:"SUPPORT1",name:"Support User",  profile:"S_A.DEBUG",  tcode:"ABAP Debug",risk:"HIGH",    validTo:"2023-12-31",justification:"Expired"},
+    {userId:"RTHOMAS", name:"Rachel Thomas", profile:"Z_ALLACCESS",tcode:"FB01,F110",  risk:"HIGH",    validTo:"2025-06-30",justification:"Pending review"},
+  ],
+  defaultUsers:[
+    {userId:"SAP*",      name:"SAP Default",  locked:false,pwdDefault:true, client:"000,001,100",risk:"CRITICAL",note:"Never locked — brute force risk"},
+    {userId:"DDIC",      name:"Dict Admin",   locked:false,pwdDefault:false,client:"000,001",    risk:"HIGH",    note:"Should be locked in prod"},
+    {userId:"EARLYWATCH",name:"Early Watch",  locked:false,pwdDefault:true, client:"066",         risk:"HIGH",    note:"Default password unchanged"},
+    {userId:"TMSADM",   name:"TMS Admin",    locked:false,pwdDefault:false,client:"000",         risk:"MEDIUM",  note:"Review necessity"},
+    {userId:"SAPCPIC",  name:"CPI Service",  locked:false,pwdDefault:true, client:"001",         risk:"HIGH",    note:"Default password CPIC"},
+  ],
+  sodConflicts:[
+    {userId:"RTHOMAS", name:"Rachel Thomas",conflict:"Create Vendor + Post Payments",  auth1:"FK01", auth2:"F110", risk:"CRITICAL",soxRelevant:true},
+    {userId:"MWILSON", name:"Mary Wilson",  conflict:"Hire Employee + Run Payroll",     auth1:"PA40", auth2:"PC00", risk:"CRITICAL",soxRelevant:true},
+    {userId:"KPATEL",  name:"Kiran Patel",  conflict:"Create PO + Goods Receipt",       auth1:"ME21N",auth2:"MIGO", risk:"HIGH",    soxRelevant:true},
+    {userId:"JSMITH",  name:"John Smith",   conflict:"Create GL + Post Journal",        auth1:"FS00", auth2:"FB01", risk:"HIGH",    soxRelevant:true},
+    {userId:"DEVUSER", name:"Dev User",     conflict:"Develop ABAP + Execute in Prod",  auth1:"SE38", auth2:"SA38", risk:"HIGH",    soxRelevant:false},
+    {userId:"BASISUSR",name:"Basis Admin",  conflict:"Modify Params + User Admin",      auth1:"RZ10", auth2:"SU01", risk:"HIGH",    soxRelevant:false},
+    {userId:"EXTUSER", name:"Ext Contractor",conflict:"Release Order + Invoice Verify",auth1:"ME28", auth2:"MIRO", risk:"MEDIUM",  soxRelevant:true},
+  ],
+  debugAccess:[
+    {userId:"DEVUSER", name:"Dev User",    env:"PROD",auth:"S_DEVELOP",actvt:"02",risk:"CRITICAL",justification:"None"},
+    {userId:"BASISUSR",name:"Basis Admin", env:"PROD",auth:"S_DEVELOP",actvt:"02",risk:"HIGH",    justification:"Basis break"},
+    {userId:"SUPPORT1",name:"Support",     env:"PROD",auth:"S_DEVELOP",actvt:"02",risk:"HIGH",    justification:"Expired"},
+    {userId:"ADMIN",   name:"Sys Admin",   env:"PROD",auth:"S_DEVELOP",actvt:"03",risk:"MEDIUM",  justification:"Read only"},
+  ],
+  sensitiveTableAccess:[
+    {userId:"ADMIN",   name:"System Admin",table:"USR02", activity:"Display+Maint",auth:"S_TABU_DIS",risk:"HIGH"},
+    {userId:"DEVUSER", name:"Dev User",    table:"T030",  activity:"Display+Maint",auth:"S_TABU_DIS",risk:"HIGH"},
+    {userId:"BASISUSR",name:"Basis Admin", table:"REGUH", activity:"Display+Maint",auth:"S_TABU_DIS",risk:"HIGH"},
+    {userId:"JSMITH",  name:"John Smith",  table:"PA0008",activity:"Display+Maint",auth:"S_TABU_DIS",risk:"CRITICAL"},
+    {userId:"SUPPORT1",name:"Support",     table:"BSEG",  activity:"Display+Maint",auth:"S_TABU_DIS",risk:"MEDIUM"},
+  ],
+  rfcSecurity:[
+    {dest:"PROD_RFC", type:"Type 3",host:"10.10.20.5",  logonType:"Stored Password",user:"RFCUSER",risk:"HIGH",    note:"Stored credentials visible"},
+    {dest:"DEV_BACK", type:"Type 3",host:"10.10.20.10", logonType:"Current User",   user:"—",      risk:"LOW",     note:"Acceptable"},
+    {dest:"EXT_WS",   type:"Type G",host:"api.vendor.com",logonType:"Basic Auth",   user:"WSUSER", risk:"HIGH",    note:"Plain HTTP with stored creds"},
+    {dest:"SM59_TEST",type:"Type 3",host:"10.10.20.99", logonType:"No Auth",        user:"—",      risk:"CRITICAL",note:"No authentication configured"},
+    {dest:"PROXY_SRV",type:"Type H",host:"proxy.corp",  logonType:"Anonymous",      user:"—",      risk:"MEDIUM",  note:"Review if still needed"},
+  ],
+  clientSettings:[
+    {client:"000",desc:"SAP Default",   changeMode:"No Changes Allowed",       catt:"Prohibited",transportRoute:"No", risk:"PASS"},
+    {client:"001",desc:"SAP Reference", changeMode:"Changes w/o Transports",   catt:"Allowed",   transportRoute:"No", risk:"HIGH"},
+    {client:"100",desc:"Production",    changeMode:"Changes w/o Transports",   catt:"Allowed",   transportRoute:"Yes",risk:"CRITICAL"},
+    {client:"200",desc:"Quality",       changeMode:"Changes w/ Transports",    catt:"Allowed",   transportRoute:"Yes",risk:"MEDIUM"},
+    {client:"300",desc:"Development",   changeMode:"Automatic Recording",      catt:"Allowed",   transportRoute:"Yes",risk:"LOW"},
+  ],
+  failedLogins:[
+    {userId:"ADMIN",   name:"System Admin",  attempts:47, lastAttempt:"2025-04-18 03:22",srcIP:"185.234.11.5",locked:false,risk:"CRITICAL"},
+    {userId:"SAPSTAR", name:"SAP*",           attempts:312,lastAttempt:"2025-04-18 04:01",srcIP:"91.108.4.18", locked:false,risk:"CRITICAL"},
+    {userId:"JSMITH",  name:"John Smith",     attempts:8,  lastAttempt:"2025-04-17 17:44",srcIP:"10.10.5.22",  locked:false,risk:"HIGH"},
+    {userId:"RTHOMAS", name:"Rachel Thomas",  attempts:5,  lastAttempt:"2025-04-17 09:10",srcIP:"10.10.5.31",  locked:false,risk:"HIGH"},
+    {userId:"EXTCON1", name:"Ext Contractor", attempts:23, lastAttempt:"2025-04-16 22:55",srcIP:"203.0.113.45",locked:true, risk:"HIGH"},
+  ],
+  firefighter:[
+    {userId:"BASISUSR",name:"Basis Admin",  ffRole:"SAP_FIREFIGHTER",validFrom:"2024-01-01",validTo:"9999-12-31",reason:"Standing access",  risk:"HIGH"},
+    {userId:"SUPPORT1",name:"Support",      ffRole:"SAP_FIREFIGHTER",validFrom:"2025-03-01",validTo:"2025-04-30",reason:"Incident #INC001",  risk:"MEDIUM"},
+    {userId:"ADMIN",   name:"System Admin", ffRole:"SAP_FIREFIGHTER",validFrom:"2020-01-01",validTo:"9999-12-31",reason:"None documented",   risk:"CRITICAL"},
+    {userId:"DEVUSER", name:"Dev User",     ffRole:"SAP_FIREFIGHTER",validFrom:"2024-06-01",validTo:"9999-12-31",reason:"Development tasks", risk:"HIGH"},
+  ],
+  licenseAssignment:[
+    {userId:"JSMITH",  name:"John Smith",        license:"Professional",lastActive:"2024-08-12",modules:"FI only",    cost:150,rec:"Downgrade to Limited"},
+    {userId:"MWILSON", name:"Mary Wilson",        license:"Professional",lastActive:"2024-07-03",modules:"HR only",    cost:150,rec:"Downgrade to Employee"},
+    {userId:"VIEWER1", name:"Report Viewer",      license:"Professional",lastActive:"2025-01-10",modules:"Reports",    cost:150,rec:"Downgrade to ESS"},
+    {userId:"EXTUSER", name:"Ext Contractor",     license:"Professional",lastActive:"2024-12-01",modules:"MM",         cost:150,rec:"Review & deactivate"},
+    {userId:"BATCHJOB",name:"Batch Process",      license:"Professional",lastActive:"Never",     modules:"None",       cost:150,rec:"Convert to System User"},
+    {userId:"TRAINER1",name:"Training User",      license:"Professional",lastActive:"2024-03-01",modules:"Multiple",   cost:150,rec:"Delete if training done"},
+  ],
+};
+
+/* ═══════════════════════════════════════════════════════════════════
+   PDF GENERATION (jsPDF + autoTable loaded from CDN)
+═══════════════════════════════════════════════════════════════════ */
+async function loadPDFLibs() {
+  if (window.jspdf && window.jspdf.jsPDF) return window.jspdf.jsPDF;
+  await new Promise((res, rej) => {
+    const s = document.createElement("script");
+    s.src = "https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js";
+    s.onload = res; s.onerror = rej; document.head.appendChild(s);
+  });
+  await new Promise((res, rej) => {
+    const s = document.createElement("script");
+    s.src = "https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js";
+    s.onload = res; s.onerror = rej; document.head.appendChild(s);
+  });
+  return window.jspdf.jsPDF;
+}
+
+function getRiskColor(r) {
+  const map = { CRITICAL:[220,50,50], HIGH:[220,120,40], MEDIUM:[200,160,40], WARN:[200,160,40], FAIL:[220,120,40], PASS:[30,160,100], LOW:[30,160,100] };
+  return map[r] || [100,130,180];
+}
+
+async function generatePDF(results, controls, conn, riskScore) {
+  const JsPDF = await loadPDFLibs();
+  const doc = new JsPDF({ orientation:"portrait", unit:"mm", format:"a4" });
+  const W = 210, H = 297;
+  const now = new Date(results.timestamp).toLocaleString();
+
+  // ── COVER PAGE ──
+  doc.setFillColor(6, 9, 15);
+  doc.rect(0, 0, W, H, "F");
+  // Accent bar
+  doc.setFillColor(0, 180, 220);
+  doc.rect(0, 0, 4, H, "F");
+  // Title
+  doc.setFont("helvetica","bold");
+  doc.setFontSize(28); doc.setTextColor(0, 212, 255);
+  doc.text("SAP SECURITY", 22, 55);
+  doc.setFontSize(22); doc.setTextColor(200, 220, 240);
+  doc.text("GAP ANALYSIS REPORT", 22, 68);
+  // Divider
+  doc.setDrawColor(30, 45, 68); doc.setLineWidth(0.4);
+  doc.line(22, 74, W-20, 74);
+  // System info
+  const meta = [
+    ["System", conn?.name || "SAP System"],
+    ["Host", `${conn?.host||"—"}:${conn?.port||"8080"}`],
+    ["SID", conn?.sid || "—"],
+    ["Client", conn?.client || "—"],
+    ["Report Date", now],
+    ["Benchmark", "SAP Security Baseline v1.8 / SAP Note 2034492"],
+  ];
+  doc.setFontSize(10); let my = 84;
+  meta.forEach(([k,v]) => {
+    doc.setFont("helvetica","bold"); doc.setTextColor(77, 98, 128);
+    doc.text(k.toUpperCase(), 22, my);
+    doc.setFont("helvetica","normal"); doc.setTextColor(200, 220, 240);
+    doc.text(v, 65, my); my += 8;
+  });
+  // Risk score circle
+  const rc = getRiskColor(riskScore > 75 ? "CRITICAL" : riskScore > 50 ? "HIGH" : riskScore > 25 ? "MEDIUM" : "PASS");
+  doc.setFillColor(...rc); doc.circle(160, 100, 22, "F");
+  doc.setFillColor(6,9,15); doc.circle(160, 100, 18, "F");
+  doc.setFont("helvetica","bold"); doc.setFontSize(20); doc.setTextColor(...rc);
+  doc.text(String(riskScore), 160, 104, { align:"center" });
+  doc.setFontSize(7); doc.setTextColor(77,98,128);
+  doc.text("RISK SCORE", 160, 111, { align:"center" });
+
+  // KPI boxes
+  const enabled = controls.filter(c => c.enabled);
+  const kpis = [
+    { label:"Controls Run",     val: String(enabled.length), color:[0,180,220] },
+    { label:"Total Findings",   val: String(Object.values(results).filter(v=>Array.isArray(v)).reduce((a,b)=>a+b.length,0)), color:[220,50,50] },
+    { label:"Critical",         val: String(Object.values(results).filter(Array.isArray).flat().filter(r=>r.risk==="CRITICAL").length), color:[220,50,50] },
+    { label:"Param Deviations", val: String((results.securityParams||[]).filter(p=>p.status!=="PASS").length), color:[220,120,40] },
+  ];
+  let kx = 22; const ky = 155;
+  kpis.forEach(k => {
+    doc.setFillColor(17,25,40); doc.roundedRect(kx, ky, 40, 22, 2, 2, "F");
+    doc.setFillColor(...k.color); doc.roundedRect(kx, ky, 40, 2, 1, 1, "F");
+    doc.setFont("helvetica","bold"); doc.setFontSize(16); doc.setTextColor(...k.color);
+    doc.text(k.val, kx+20, ky+13, {align:"center"});
+    doc.setFontSize(7); doc.setTextColor(100,130,160);
+    doc.text(k.label.toUpperCase(), kx+20, ky+19, {align:"center"});
+    kx += 44;
+  });
+
+  // Footer
+  doc.setFontSize(8); doc.setTextColor(40,60,90);
+  doc.text("CONFIDENTIAL — For Internal Use Only", W/2, H-12, {align:"center"});
+  doc.text("Generated by SAP Security Analyzer", W/2, H-7, {align:"center"});
+
+  // ── EXECUTIVE SUMMARY PAGE ──
+  doc.addPage();
+  doc.setFillColor(6, 9, 15); doc.rect(0, 0, W, H, "F");
+  doc.setFillColor(0, 180, 220); doc.rect(0, 0, 4, H, "F");
+
+  const pageHeader = (title, sub) => {
+    doc.setFont("helvetica","bold"); doc.setFontSize(14); doc.setTextColor(0,212,255);
+    doc.text(title, 14, 18);
+    doc.setFontSize(8); doc.setFont("helvetica","normal"); doc.setTextColor(77,98,128);
+    doc.text(sub, 14, 25);
+    doc.setDrawColor(30,45,68); doc.setLineWidth(0.3); doc.line(14, 28, W-14, 28);
+  };
+
+  pageHeader("Executive Summary", "Risk overview and prioritized remediation actions");
+
+  // Remediation priorities
+  const sections = [
+    { title:"🔴  P1 — Immediate (Within 48 Hours)", color:[220,50,50], items:[
+      "Remove SAP_ALL/SAP_NEW from all non-basis users (zero tolerance)",
+      "Lock SAP*, EARLYWATCH in all clients; change DDIC default password",
+      "Investigate and block external IPs with 20+ failed login attempts",
+      "Remove S_DEVELOP/ACTVT=02 debug access from all production users",
+      "Set production client 100 to No Changes Allowed (SCC4)",
+    ]},
+    { title:"🟠  P2 — Short-term (Within 30 Days)", color:[220,120,40], items:[
+      "Remediate all SOX-relevant SoD conflicts or document compensating controls",
+      "Force password reset for users with passwords older than 90 days",
+      "Lock all dormant users inactive >180 days; delete after 365 days",
+      "Set login/min_password_lng=8, min_password_specials=1, min_password_digits=1",
+      "Set login/fails_to_user_lock=5 and login/failed_user_auto_unlock=0",
+      "Close RFC destinations with stored credentials or no authentication",
+    ]},
+    { title:"🟡  P3 — Medium-term (Within 90 Days)", color:[200,160,40], items:[
+      "Enable GUI auto-logout: rdisp/gui_auto_logout=3600",
+      "Enable SNC encryption: snc/enable=1",
+      "Convert all perpetual firefighter access to time-limited assignments",
+      "Review and restrict S_TABU_DIS access for sensitive tables",
+      "Enable comprehensive audit logging: rsau/max_diskspace/local=2000",
+    ]},
+  ];
+  let sy = 34;
+  sections.forEach(sec => {
+    doc.setFont("helvetica","bold"); doc.setFontSize(9); doc.setTextColor(...sec.color);
+    doc.text(sec.title, 14, sy); sy += 5;
+    doc.setFont("helvetica","normal"); doc.setFontSize(8); doc.setTextColor(160,185,210);
+    sec.items.forEach(item => {
+      doc.text(`  •  ${item}`, 14, sy, {maxWidth:180}); sy += 5.5;
+    });
+    sy += 3;
+  });
+
+  // ── PER-CONTROL PAGES ──
+  const enabledCtrl = controls.filter(c => c.enabled && results[c.resultKey] && results[c.resultKey].length > 0);
+  let secNum = 1;
+
+  for (const ctrl of enabledCtrl) {
+    const data = results[ctrl.resultKey];
+    if (!Array.isArray(data) || data.length === 0) continue;
+    doc.addPage();
+    doc.setFillColor(6,9,15); doc.rect(0,0,W,H,"F");
+    doc.setFillColor(0,180,220); doc.rect(0,0,4,H,"F");
+
+    pageHeader(`${secNum++}. ${ctrl.name}`, `${ctrl.table} · ${ctrl.entity} · ${ctrl.benchmark}`);
+
+    // Description
+    doc.setFont("helvetica","italic"); doc.setFontSize(8); doc.setTextColor(100,130,170);
+    doc.text(ctrl.desc, 14, 34, {maxWidth:180});
+
+    // Conditions
+    doc.setFont("helvetica","bold"); doc.setFontSize(7.5); doc.setTextColor(77,98,128);
+    doc.text("ACTIVE CONDITIONS:", 14, 42);
+    doc.setFont("helvetica","normal"); doc.setTextColor(130,160,190);
+    ctrl.conditions.forEach((c, i) => {
+      doc.text(`  [${i+1}] ${c.label}`, 14, 47 + i*5, {maxWidth:180});
+    });
+
+    const topY = 47 + ctrl.conditions.length * 5 + 4;
+
+    // Count badge
+    const sevC = getRiskColor(ctrl.severity);
+    doc.setFillColor(...sevC.map(v=>Math.min(v,200)));
+    doc.roundedRect(W-60, 28, 46, 14, 2, 2, "F");
+    doc.setFont("helvetica","bold"); doc.setFontSize(7); doc.setTextColor(255,255,255);
+    doc.text(`${data.length} FINDINGS`, W-37, 36, {align:"center"});
+    doc.setFontSize(6); doc.setTextColor(230,230,230);
+    doc.text(ctrl.severity, W-37, 40, {align:"center"});
+
+    // Table
+    const cols = (ctrl.columns || Object.keys(data[0])).slice(0,7);
+    const colLabels = ctrl.colLabels || cols.map(c=>c.toUpperCase());
+    const rows = data.map(row => cols.map(col => {
+      const v = row[col];
+      if (v === null || v === undefined) return "—";
+      if (typeof v === "boolean") return v ? "Yes" : "No";
+      return String(v);
+    }));
+
+    doc.autoTable({
+      startY: topY,
+      head: [colLabels.slice(0,7)],
+      body: rows,
+      margin: {left:14, right:14},
+      styles: {
+        fontSize:7.5, cellPadding:3, font:"helvetica",
+        textColor:[190,210,230], lineColor:[30,45,68], lineWidth:0.2,
+        fillColor:[11,17,32],
+      },
+      headStyles: {
+        fillColor:[17,25,40], textColor:[100,130,160],
+        fontStyle:"bold", fontSize:7, cellPadding:3.5,
+        lineColor:[30,45,68], lineWidth:0.3,
+      },
+      alternateRowStyles: { fillColor:[8,13,24] },
+      tableLineColor:[30,45,68], tableLineWidth:0.3,
+      didDrawCell: (d) => {
+        if (d.section === "body") {
+          const val = String(d.cell.raw || "");
+          const riskMap = {"CRITICAL":[220,50,50],"HIGH":[220,120,40],"MEDIUM":[200,160,40],"WARN":[200,160,40],"FAIL":[220,120,40],"PASS":[30,160,100],"LOW":[30,160,100]};
+          if (riskMap[val]) {
+            const [r,g,b] = riskMap[val];
+            doc.setFillColor(r,g,b,0.15);
+            doc.setTextColor(r,g,b);
+            doc.setFont("helvetica","bold");
+            doc.setFontSize(6.5);
+            doc.text(val, d.cell.x + d.cell.width/2, d.cell.y + d.cell.height/2 + 0.5, {align:"center"});
+            return false;
+          }
+          // Color days
+          const daysMatch = val.match(/^(\d+)d$/);
+          if (daysMatch) {
+            const n = parseInt(daysMatch[1]);
+            const [r,g,b] = n>365?[220,50,50]:n>180?[220,120,40]:[200,160,40];
+            doc.setTextColor(r,g,b); doc.setFont("helvetica","bold"); doc.setFontSize(7.5);
+            doc.text(val, d.cell.x+3, d.cell.y+d.cell.height/2+0.5);
+            return false;
+          }
+        }
+      },
+    });
+
+    // SAP note reference
+    const finalY = (doc.lastAutoTable?.finalY||150) + 5;
+    doc.setFont("helvetica","normal"); doc.setFontSize(7); doc.setTextColor(50,70,100);
+    doc.text(`SAP Note: ${ctrl.sapNote}  |  Fields: ${ctrl.fields}`, 14, Math.min(finalY, H-15));
+  };
+
+  // ── APPENDIX: PARAMETER DETAILS ──
+  if (results.securityParams && results.securityParams.length) {
+    doc.addPage();
+    doc.setFillColor(6,9,15); doc.rect(0,0,W,H,"F");
+    doc.setFillColor(0,180,220); doc.rect(0,0,4,H,"F");
+    pageHeader("Appendix A: Security Parameter Detail", "Full SAP profile parameter analysis vs SAP Security Baseline v1.8");
+    const rows = results.securityParams.map(p => [p.cat, p.param, p.desc, p.current, p.recommended, p.status]);
+    doc.autoTable({
+      startY:32,
+      head:[["Category","Parameter","Description","Current","Recommended","Status"]],
+      body:rows,
+      margin:{left:14,right:14},
+      styles:{fontSize:7,cellPadding:2.5,font:"helvetica",textColor:[190,210,230],lineColor:[30,45,68],lineWidth:0.2,fillColor:[11,17,32]},
+      headStyles:{fillColor:[17,25,40],textColor:[100,130,160],fontStyle:"bold",fontSize:6.5,cellPadding:3,lineColor:[30,45,68],lineWidth:0.3},
+      alternateRowStyles:{fillColor:[8,13,24]},
+      columnStyles:{0:{cellWidth:20},1:{cellWidth:55},2:{cellWidth:55},3:{cellWidth:18},4:{cellWidth:18},5:{cellWidth:16}},
+    });
+  }
+
+  // ── CUSTOM CONTROLS ──
+  const customCtrl = controls.filter(c => c.enabled && !c.builtIn && results[c.resultKey]);
+  for (const ctrl of customCtrl) {
+    const data = results[ctrl.resultKey];
+    if (!data || data.length === 0) continue;
+    doc.addPage();
+    doc.setFillColor(6,9,15); doc.rect(0,0,W,H,"F");
+    doc.setFillColor(168,85,247); doc.rect(0,0,4,H,"F");
+    pageHeader(`Custom Control: ${ctrl.name}`, `${ctrl.table} · ${ctrl.entity}`);
+    doc.setFont("helvetica","italic"); doc.setFontSize(8); doc.setTextColor(100,130,170);
+    doc.text(ctrl.desc || "User-defined control", 14, 33, {maxWidth:180});
+    const cols = Object.keys(data[0]);
+    const rows = data.map(r => cols.map(c => String(r[c]??"")));
+    doc.autoTable({startY:40,head:[cols.map(c=>c.toUpperCase())],body:rows,margin:{left:14,right:14},styles:{fontSize:7,cellPadding:2.5,font:"helvetica",textColor:[190,210,230],lineColor:[30,45,68],lineWidth:0.2,fillColor:[11,17,32]},headStyles:{fillColor:[30,20,50],textColor:[180,140,240],fontStyle:"bold",fontSize:6.5,lineColor:[60,30,90]},alternateRowStyles:{fillColor:[8,13,24]}});
+  }
+
+  // Page numbers
+  const totalPages = doc.getNumberOfPages();
+  for (let i = 1; i <= totalPages; i++) {
+    doc.setPage(i);
+    doc.setFont("helvetica","normal"); doc.setFontSize(7); doc.setTextColor(40,60,90);
+    doc.text(`Page ${i} of ${totalPages}`, W-14, H-6, {align:"right"});
+    doc.text("SAP Security Gap Analysis — Confidential", 14, H-6);
+  }
+
+  doc.save(`SAP_Security_GapAnalysis_${conn?.sid||"SAP"}_${new Date().toISOString().slice(0,10)}.pdf`);
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   CONDITION OPERATORS
+═══════════════════════════════════════════════════════════════════ */
+const OPERATORS = [
+  {v:"older_than",   l:"Older than (days)"},
+  {v:"greater_than", l:"Greater than"},
+  {v:"less_than",    l:"Less than"},
+  {v:"equals",       l:"Equals"},
+  {v:"not_equal",    l:"Not equal to"},
+  {v:"contains",     l:"Contains (comma-sep)"},
+  {v:"match",        l:"Matches ruleset"},
+  {v:"mismatch",     l:"Mismatches with"},
+];
+
+const SEVERITIES = ["CRITICAL","HIGH","MEDIUM","WARN","LOW","PASS"];
+const CATS = ["User Management","Authorizations","System Config","Network/RFC","Monitoring","GRC/Emergency","Licensing","Custom"];
+
+/* ═══════════════════════════════════════════════════════════════════
+   CONTROL FORM COMPONENT
+═══════════════════════════════════════════════════════════════════ */
+function ControlForm({ initial, onSave, onCancel }) {
+  const blank = { id:null, name:"", desc:"", table:"", fields:"", entity:"", cat:"Custom", severity:"HIGH", enabled:true, builtIn:false, conditions:[{ field:"", op:"greater_than", value:"", unit:"", label:"" }], sapNote:"", benchmark:"", resultKey:"", columns:[], colLabels:[] };
+  const [form, setForm] = useState(initial ? {...initial} : blank);
+  const [condErr, setCondErr] = useState("");
+
+  const upd = (k, v) => setForm(f => ({...f, [k]:v}));
+  const updCond = (i, k, v) => setForm(f => {
+    const conds = [...f.conditions];
+    conds[i] = {...conds[i], [k]:v};
+    if (k==="field"||k==="op"||k==="value") {
+      conds[i].label = `${conds[i].field||"Field"} ${conds[i].op||"op"} ${conds[i].value||"value"}`;
+    }
+    return {...f, conditions:conds};
+  });
+  const addCond = () => setForm(f => ({...f, conditions:[...f.conditions,{field:"",op:"greater_than",value:"",unit:"",label:""}]}));
+  const remCond = (i) => setForm(f => ({...f, conditions:f.conditions.filter((_,j)=>j!==i)}));
+
+  const validate = () => {
+    if(!form.name.trim()){return "Name is required";}
+    if(!form.table.trim()){return "SAP Table is required";}
+    if(!form.entity.trim()){return "OData entity is required";}
+    if(form.conditions.some(c=>!c.field||!c.value)){return "All conditions must have field and value";}
+    return "";
+  };
+
+  const save = () => {
+    const err = validate();
+    if(err){setCondErr(err);return;}
+    const out = {...form, id:form.id||`custom_${Date.now()}`, resultKey:form.resultKey||form.id||`custom_${Date.now()}`};
+    onSave(out);
+  };
+
+  const inp = { background:"var(--bg3)", border:"1px solid var(--bd2)", borderRadius:"var(--radius)", padding:"8px 11px", color:"var(--txt)", fontFamily:"var(--mono)", fontSize:12, outline:"none", width:"100%" };
+  const sel = { ...inp, cursor:"pointer" };
+  const lbl = { display:"block", fontSize:10, color:"var(--txt3)", marginBottom:5, fontWeight:700, letterSpacing:"0.08em", textTransform:"uppercase", fontFamily:"var(--display)" };
+
+  return (
+    <div className="scale-in" style={{ background:"var(--bg3)", border:"1px solid rgba(168,85,247,.3)", borderRadius:14, padding:22, marginBottom:20 }}>
+      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:18 }}>
+        <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+          <div style={{ width:28, height:28, borderRadius:8, background:"rgba(168,85,247,.12)", border:"1px solid rgba(168,85,247,.3)", display:"flex", alignItems:"center", justifyContent:"center", color:"#a855f7" }}>
+            <Icons.Filter size={13}/>
+          </div>
+          <span style={{ fontFamily:"var(--display)", fontWeight:700, color:"var(--txt)", fontSize:14 }}>
+            {form.id && !form.builtIn ? "Edit Control" : form.builtIn ? "Configure Control" : "New Custom Control"}
+          </span>
+          {form.builtIn && <SevTag v="BUILT-IN" sm/>}
+        </div>
+        <button onClick={onCancel} style={{ background:"none", border:"none", color:"var(--txt3)", padding:4 }}><Icons.X size={16}/></button>
+      </div>
+
+      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14 }}>
+        {/* Name */}
+        <div style={{ gridColumn:"1/-1" }}>
+          <label style={lbl}>Control Name *</label>
+          <input style={inp} value={form.name} onChange={e=>upd("name",e.target.value)} placeholder="e.g. Super Users Without Time Restriction" disabled={form.builtIn}/>
+        </div>
+        {/* Description */}
+        <div style={{ gridColumn:"1/-1" }}>
+          <label style={lbl}>Description</label>
+          <textarea style={{...inp,resize:"vertical",minHeight:56}} value={form.desc} onChange={e=>upd("desc",e.target.value)} placeholder="What risk does this control detect?"/>
+        </div>
+        {/* Table + Fields */}
+        <div>
+          <label style={lbl}>SAP Table(s) *</label>
+          <input style={inp} value={form.table} onChange={e=>upd("table",e.target.value)} placeholder="e.g. AGR_USERS / USR12" disabled={form.builtIn}/>
+        </div>
+        <div>
+          <label style={lbl}>SAP Fields</label>
+          <input style={inp} value={form.fields} onChange={e=>upd("fields",e.target.value)} placeholder="e.g. BNAME,AGR_NAME,GLTGB"/>
+        </div>
+        {/* OData entity */}
+        <div>
+          <label style={lbl}>OData Entity *</label>
+          <input style={inp} value={form.entity} onChange={e=>upd("entity",e.target.value)} placeholder="e.g. CustomCheckSet" disabled={form.builtIn}/>
+        </div>
+        {/* Category + Severity */}
+        <div>
+          <label style={lbl}>Category</label>
+          <select style={sel} value={form.cat} onChange={e=>upd("cat",e.target.value)}>
+            {CATS.map(c=><option key={c} value={c}>{c}</option>)}
+          </select>
+        </div>
+        <div>
+          <label style={lbl}>Severity</label>
+          <select style={sel} value={form.severity} onChange={e=>upd("severity",e.target.value)}>
+            {SEVERITIES.map(v=><option key={v} value={v}>{v}</option>)}
+          </select>
+        </div>
+        <div>
+          <label style={lbl}>SAP Note</label>
+          <input style={inp} value={form.sapNote} onChange={e=>upd("sapNote",e.target.value)} placeholder="e.g. 2034492"/>
+        </div>
+        {/* Benchmark */}
+        <div style={{ gridColumn:"1/-1" }}>
+          <label style={lbl}>Benchmark / Reference</label>
+          <input style={inp} value={form.benchmark} onChange={e=>upd("benchmark",e.target.value)} placeholder="e.g. SAP Security Baseline v1.8 §4.1"/>
+        </div>
+      </div>
+
+      {/* Conditions */}
+      <div style={{ marginTop:20 }}>
+        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:12 }}>
+          <label style={{ ...lbl, marginBottom:0 }}>Detection Conditions</label>
+          <button onClick={addCond} style={{ display:"flex", alignItems:"center", gap:5, padding:"5px 10px", background:"rgba(168,85,247,.1)", border:"1px solid rgba(168,85,247,.25)", borderRadius:7, color:"#a855f7", fontSize:11, fontWeight:600 }}>
+            <Icons.Plus size={11}/> Add Condition
+          </button>
+        </div>
+        <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+          {form.conditions.map((cond, i) => (
+            <div key={i} style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr auto", gap:8, padding:"12px 14px", background:"var(--bg4)", borderRadius:9, border:"1px solid var(--bd)" }}>
+              <div>
+                <label style={{...lbl,marginBottom:4}}>SAP Field</label>
+                <input style={inp} value={cond.field} onChange={e=>updCond(i,"field",e.target.value)} placeholder="e.g. TRDAT"/>
+              </div>
+              <div>
+                <label style={{...lbl,marginBottom:4}}>Operator</label>
+                <select style={sel} value={cond.op} onChange={e=>updCond(i,"op",e.target.value)}>
+                  {OPERATORS.map(o=><option key={o.v} value={o.v}>{o.l}</option>)}
+                </select>
+              </div>
+              <div>
+                <label style={{...lbl,marginBottom:4}}>Value / Threshold</label>
+                <input style={inp} value={cond.value} onChange={e=>updCond(i,"value",e.target.value)} placeholder="e.g. 90"/>
+              </div>
+              <div style={{ display:"flex", alignItems:"flex-end", paddingBottom:2 }}>
+                <button onClick={()=>remCond(i)} disabled={form.conditions.length===1}
+                  style={{ padding:"8px", background:"transparent", border:"1px solid var(--bd)", borderRadius:7, color:"var(--txt3)", opacity:form.conditions.length===1?0.3:1 }}>
+                  <Icons.Trash size={13}/>
+                </button>
+              </div>
+              <div style={{ gridColumn:"1/-1" }}>
+                <label style={{...lbl,marginBottom:4}}>Condition Label (auto-fill or custom)</label>
+                <input style={{...inp,fontSize:11}} value={cond.label} onChange={e=>updCond(i,"label",e.target.value)} placeholder="Human-readable description"/>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {condErr && <div style={{ marginTop:12, padding:"9px 14px", background:"rgba(240,64,64,.1)", border:"1px solid rgba(240,64,64,.25)", borderRadius:8, color:"#fca5a5", fontSize:12 }}>{condErr}</div>}
+
+      <div style={{ display:"flex", gap:8, marginTop:18 }}>
+        <button onClick={save} style={{ display:"flex", alignItems:"center", gap:6, padding:"9px 18px", background:"var(--cyan)", color:"#000", borderRadius:9, fontWeight:700, fontSize:13 }}>
+          <Icons.Save size={13}/> {form.builtIn ? "Save Configuration" : "Save Control"}
+        </button>
+        <button onClick={onCancel} style={{ display:"flex", alignItems:"center", gap:6, padding:"9px 14px", background:"var(--bg4)", border:"1px solid var(--bd2)", borderRadius:9, color:"var(--txt2)", fontSize:13 }}>
+          <Icons.X size={13}/> Cancel
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   RESULT TABLES
+═══════════════════════════════════════════════════════════════════ */
+function DataTable({ cols, rows }) {
+  return (
+    <div style={{ overflowX:"auto", borderRadius:9, border:"1px solid var(--bd)" }}>
+      <table style={{ width:"100%", borderCollapse:"collapse", fontSize:11.5, fontFamily:"var(--mono)" }}>
+        <thead>
+          <tr style={{ background:"var(--bg3)", borderBottom:"1px solid var(--bd2)" }}>
+            {cols.map(c => <th key={c.k} style={{ padding:"9px 13px", textAlign:"left", color:"var(--txt3)", fontSize:9.5, fontWeight:700, letterSpacing:"0.09em", textTransform:"uppercase", whiteSpace:"nowrap" }}>{c.l}</th>)}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.length === 0
+            ? <tr><td colSpan={cols.length} style={{ padding:"32px", textAlign:"center", color:"var(--txt4)", fontFamily:"var(--font)", fontSize:13 }}>No findings</td></tr>
+            : rows.map((row, i) => (
+              <tr key={i} style={{ borderBottom:"1px solid rgba(30,45,68,.5)", background: i%2===1?"rgba(11,17,32,.5)":"transparent", transition:"background .1s" }}
+                onMouseEnter={e=>e.currentTarget.style.background="rgba(0,212,255,.03)"}
+                onMouseLeave={e=>e.currentTarget.style.background=i%2===1?"rgba(11,17,32,.5)":"transparent"}>
+                {cols.map(c => (
+                  <td key={c.k} style={{ padding:"8px 13px", color:"var(--txt)", verticalAlign:"middle" }}>
+                    {c.r ? c.r(row[c.k], row) : (row[c.k] ?? "—")}
+                  </td>
+                ))}
+              </tr>
+            ))
+          }
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function ResSection({ ctrl, data }) {
+  const [open, setOpen] = useState(true);
+  const sc = s(ctrl.severity);
+  const count = Array.isArray(data) ? data.length : data?.filter?.(d=>d.status!=="PASS")?.length || 0;
+  const CIcon = Icons[{Clock:true,Key:true,Settings:true,DB:true,Shield:true,Users:true,Alert:true,Bug:true,Table:true,Wifi:true,Flame:true,Lock:true,BarChart:true}[ctrl.iconName||"Shield"] ? ctrl.iconName : "Shield"] || Icons.Shield;
+
+  const colMap = {
+    dormantUsers:        [{k:"userId",l:"User ID",r:v=><span style={{color:"var(--cyan)"}}>{v}</span>},{k:"name",l:"Full Name"},{k:"dept",l:"Dept"},{k:"type",l:"Type"},{k:"lastLogin",l:"Last Login"},{k:"days",l:"Days",r:v=><span style={{color:v>365?"var(--red)":v>180?"var(--orange)":"var(--yellow)",fontWeight:700}}>{v}d</span>},{k:"locked",l:"Locked",r:v=>v?<SevTag v="PASS" sm/>:<SevTag v="HIGH" sm/>}],
+    passwordAge:         [{k:"userId",l:"User ID",r:v=><span style={{color:"var(--cyan)"}}>{v}</span>},{k:"name",l:"Full Name"},{k:"type",l:"Type"},{k:"lastChange",l:"Last Changed"},{k:"days",l:"Age",r:v=><span style={{color:v>365?"var(--red)":v>180?"var(--orange)":"var(--yellow)",fontWeight:700}}>{v}d</span>},{k:"mustChange",l:"Must Change",r:v=>v?<SevTag v="PASS" sm/>:<SevTag v="FAIL" sm/>}],
+    securityParams:      [{k:"cat",l:"Cat",r:v=><span style={{color:"var(--txt2)",fontSize:10}}>{v}</span>},{k:"param",l:"Parameter",r:v=><span style={{color:"var(--cyan2)",fontSize:10}}>{v}</span>},{k:"desc",l:"Description",r:v=><span style={{fontFamily:"var(--font)",fontSize:12}}>{v}</span>},{k:"current",l:"Current",r:v=><code style={{background:"var(--bg3)",padding:"1px 5px",borderRadius:3,border:"1px solid var(--bd)"}}>{v}</code>},{k:"recommended",l:"Target",r:v=><span style={{color:"var(--green2)"}}>{v}</span>},{k:"status",l:"Status",r:v=><SevTag v={v} sm/>}],
+    criticalAuths:       [{k:"userId",l:"User ID",r:v=><span style={{color:"var(--cyan)"}}>{v}</span>},{k:"name",l:"Full Name"},{k:"profile",l:"Profile",r:v=><span style={{color:"var(--red2)",fontWeight:700}}>{v}</span>},{k:"tcode",l:"T-Code"},{k:"risk",l:"Risk",r:v=><SevTag v={v} sm/>},{k:"validTo",l:"Valid To",r:v=><span style={{color:v==="9999-12-31"?"var(--red)":"var(--yellow)"}}>{v}</span>},{k:"justification",l:"Justification",r:v=><span style={{color:v==="None on file"?"var(--red)":"var(--txt2)",fontFamily:"var(--font)",fontSize:11}}>{v}</span>}],
+    defaultUsers:        [{k:"userId",l:"User ID",r:v=><span style={{color:"var(--red2)",fontWeight:700}}>{v}</span>},{k:"name",l:"Description"},{k:"client",l:"Clients"},{k:"locked",l:"Locked",r:v=>v?<SevTag v="PASS" sm/>:<SevTag v="CRITICAL" sm/>},{k:"pwdDefault",l:"Default Pwd",r:v=>v?<SevTag v="CRITICAL" sm/>:<SevTag v="PASS" sm/>},{k:"risk",l:"Risk",r:v=><SevTag v={v} sm/>},{k:"note",l:"Finding",r:v=><span style={{color:"var(--orange2)",fontFamily:"var(--font)",fontSize:11}}>{v}</span>}],
+    sodConflicts:        [{k:"userId",l:"User ID",r:v=><span style={{color:"var(--cyan)"}}>{v}</span>},{k:"name",l:"Full Name"},{k:"conflict",l:"SoD Conflict",r:v=><span style={{fontFamily:"var(--font)",color:"var(--orange2)"}}>{v}</span>},{k:"auth1",l:"Auth 1",r:v=><span style={{color:"var(--red2)"}}>{v}</span>},{k:"auth2",l:"Auth 2",r:v=><span style={{color:"var(--red2)"}}>{v}</span>},{k:"risk",l:"Risk",r:v=><SevTag v={v} sm/>},{k:"soxRelevant",l:"SOX",r:v=>v?<span style={{color:"var(--red)",fontWeight:700,fontSize:10}}>SOX</span>:<span style={{color:"var(--txt3)",fontSize:10}}>—</span>}],
+    debugAccess:         [{k:"userId",l:"User ID",r:v=><span style={{color:"var(--cyan)"}}>{v}</span>},{k:"name",l:"Full Name"},{k:"env",l:"Env",r:v=><span style={{color:v==="PROD"?"var(--red)":"var(--green)"}}>{v}</span>},{k:"auth",l:"Auth Object",r:v=><span style={{color:"var(--red2)"}}>{v}</span>},{k:"actvt",l:"Activity",r:v=><span style={{color:v==="02"?"var(--red)":"var(--yellow)"}}>{v==="02"?"02 (Change)":"03 (Display)"}</span>},{k:"risk",l:"Risk",r:v=><SevTag v={v} sm/>},{k:"justification",l:"Justification",r:v=><span style={{color:v==="None"||v==="Expired"?"var(--red)":"var(--txt2)",fontFamily:"var(--font)",fontSize:11}}>{v}</span>}],
+    sensitiveTableAccess:[{k:"userId",l:"User ID",r:v=><span style={{color:"var(--cyan)"}}>{v}</span>},{k:"name",l:"Full Name"},{k:"table",l:"Table",r:v=><span style={{color:"var(--red2)",fontWeight:700}}>{v}</span>},{k:"activity",l:"Access",r:v=><span style={{color:"var(--orange)"}}>{v}</span>},{k:"auth",l:"Auth Obj"},{k:"risk",l:"Risk",r:v=><SevTag v={v} sm/>}],
+    rfcSecurity:         [{k:"dest",l:"Destination",r:v=><span style={{color:"var(--cyan)"}}>{v}</span>},{k:"type",l:"Type"},{k:"host",l:"Host",r:v=><span style={{fontSize:11}}>{v}</span>},{k:"logonType",l:"Auth",r:v=><span style={{color:v==="No Auth"?"var(--red)":v==="Stored Password"?"var(--orange)":"var(--txt2)"}}>{v}</span>},{k:"user",l:"User"},{k:"risk",l:"Risk",r:v=><SevTag v={v} sm/>},{k:"note",l:"Finding",r:v=><span style={{fontFamily:"var(--font)",fontSize:11,color:"var(--orange2)"}}>{v}</span>}],
+    clientSettings:      [{k:"client",l:"Client",r:v=><span style={{color:"var(--cyan)",fontWeight:700}}>{v}</span>},{k:"desc",l:"Description"},{k:"changeMode",l:"Change Mode",r:v=><span style={{color:v.includes("without")?"var(--red)":v.includes("Automatic")?"var(--orange)":"var(--txt2)",fontFamily:"var(--font)",fontSize:11}}>{v}</span>},{k:"catt",l:"CATT",r:v=><span style={{color:v==="Allowed"?"var(--red)":"var(--green)"}}>{v}</span>},{k:"transportRoute",l:"TMS",r:v=><span style={{color:v==="Yes"?"var(--green)":"var(--yellow)"}}>{v}</span>},{k:"risk",l:"Risk",r:v=><SevTag v={v} sm/>}],
+    failedLogins:        [{k:"userId",l:"User ID",r:v=><span style={{color:"var(--cyan)"}}>{v}</span>},{k:"name",l:"Full Name"},{k:"attempts",l:"Attempts",r:v=><span style={{color:v>50?"var(--red)":v>10?"var(--orange)":"var(--yellow)",fontWeight:700}}>{v}</span>},{k:"lastAttempt",l:"Last Attempt"},{k:"srcIP",l:"Source IP",r:v=><code style={{fontSize:10}}>{v}</code>},{k:"locked",l:"Locked",r:v=>v?<SevTag v="PASS" sm/>:<SevTag v="HIGH" sm/>},{k:"risk",l:"Risk",r:v=><SevTag v={v} sm/>}],
+    firefighter:         [{k:"userId",l:"User ID",r:v=><span style={{color:"var(--cyan)"}}>{v}</span>},{k:"name",l:"Full Name"},{k:"ffRole",l:"FF Role",r:v=><span style={{color:"var(--red2)",fontWeight:700}}>{v}</span>},{k:"validFrom",l:"From"},{k:"validTo",l:"To",r:v=><span style={{color:v==="9999-12-31"?"var(--red)":"var(--yellow)"}}>{v}</span>},{k:"reason",l:"Reason",r:v=><span style={{fontFamily:"var(--font)",fontSize:11,color:v==="None documented"?"var(--red)":"var(--txt2)"}}>{v}</span>},{k:"risk",l:"Risk",r:v=><SevTag v={v} sm/>}],
+    licenseAssignment:   [{k:"userId",l:"User ID",r:v=><span style={{color:"var(--cyan)"}}>{v}</span>},{k:"name",l:"Full Name"},{k:"license",l:"License",r:v=><span style={{color:"var(--orange)"}}>{v}</span>},{k:"lastActive",l:"Last Active"},{k:"modules",l:"Modules"},{k:"cost",l:"Cost/mo",r:v=><span style={{color:"var(--orange)",fontWeight:700}}>${v}</span>},{k:"rec",l:"Recommendation",r:v=><span style={{fontFamily:"var(--font)",fontSize:11,color:"var(--yellow2)"}}>{v}</span>}],
+  };
+
+  const cols = colMap[ctrl.resultKey] || Object.keys((data||[])[0]||{}).map(k=>({k,l:k}));
+  const rows = Array.isArray(data) ? data : [];
+
+  return (
+    <div className="fade-up" style={{ border:`1px solid ${sc.bd}`, borderRadius:12, overflow:"hidden", marginBottom:14 }}>
+      <div onClick={()=>setOpen(o=>!o)} style={{ background:sc.bg, padding:"12px 18px", display:"flex", alignItems:"center", gap:12, cursor:"pointer", userSelect:"none" }}>
+        <div style={{ width:30,height:30,borderRadius:8,background:`${sc.txt}22`,display:"flex",alignItems:"center",justifyContent:"center",color:sc.txt,flexShrink:0 }}>
+          <CIcon size={14}/>
+        </div>
+        <div style={{ flex:1 }}>
+          <div style={{ display:"flex", alignItems:"center", gap:10, flexWrap:"wrap" }}>
+            <span style={{ fontFamily:"var(--display)", fontWeight:700, color:"var(--txt)", fontSize:13 }}>{ctrl.name}</span>
+            {count>0 && <span style={{ background:sc.badge, color:sc.btxt, border:`1px solid ${sc.bd}`, padding:"1px 9px", borderRadius:20, fontSize:10.5, fontWeight:700, fontFamily:"var(--mono)" }}>{count} findings</span>}
+            {!ctrl.builtIn && <SevTag v="CUSTOM" sm/>}
+          </div>
+          <div style={{ fontSize:10.5, color:"var(--txt3)", marginTop:2, fontFamily:"var(--mono)" }}>
+            <span style={{color:"var(--cyan3_text)",color:"#4d8fa0"}}>{ctrl.table}</span> · {ctrl.entity}
+            {ctrl.benchmark && <> · <span style={{color:"var(--txt4)"}}>{ctrl.benchmark}</span></>}
+          </div>
+        </div>
+        <SevTag v={ctrl.severity}/>
+        <div style={{color:"var(--txt3)",marginLeft:4}}>{open?<Icons.ChevU size={13}/>:<Icons.ChevD size={13}/>}</div>
+      </div>
+      {open && (
+        <div style={{ padding:16 }}>
+          <p style={{ fontSize:12, color:"var(--txt3)", marginBottom:10, fontFamily:"var(--font)" }}>{ctrl.desc}</p>
+          {ctrl.conditions?.length > 0 && (
+            <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginBottom:12 }}>
+              {ctrl.conditions.map((c,i)=>(
+                <span key={i} style={{ background:"var(--bg4)", border:"1px solid var(--bd)", borderRadius:6, padding:"3px 10px", fontSize:10.5, color:"var(--txt2)", fontFamily:"var(--mono)" }}>
+                  <span style={{color:"var(--txt3)"}}>IF </span>{c.label}
+                </span>
+              ))}
+            </div>
+          )}
+          <DataTable cols={cols} rows={rows}/>
+          {ctrl.resultKey==="securityParams" && (
+            <div style={{ display:"flex", gap:20, marginTop:10, padding:"8px 14px", background:"var(--bg3)", borderRadius:8 }}>
+              {[["PASS",rows.filter(r=>r.status==="PASS").length,"var(--green)"],["WARN",rows.filter(r=>r.status==="WARN").length,"var(--yellow)"],["FAIL",rows.filter(r=>r.status==="FAIL").length,"var(--red)"]].map(([l,v,c])=>(
+                <div key={l} style={{fontSize:12}}><span style={{color:c,fontWeight:700,fontFamily:"var(--mono)"}}>{v}</span> <span style={{color:"var(--txt3)"}}>{l}</span></div>
+              ))}
+              <span style={{marginLeft:"auto",fontSize:11,color:"var(--txt4)"}}>SAP Note {ctrl.sapNote}</span>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   MAIN APP
+═══════════════════════════════════════════════════════════════════ */
+function App() {
+  const [view, setView]         = useState("dashboard");
+  const [controls, setControls] = useState(DEFAULT_CONTROLS);
+  const [connections, setConns] = useState([{ id:1, name:"DEV System", host:"10.10.19.103", port:"8080", sid:"DEV", client:"100", user:"SAPUSER", password:"", proxyUrl:"http://localhost:3100", mode:"proxy" }]);
+  const [activeConn, setActive] = useState(1);
+  const [editConn, setEditConn] = useState(null);
+  const [editCtrl, setEditCtrl] = useState(null);
+  const [running, setRunning]   = useState(false);
+  const [progress, setProg]     = useState(0);
+  const [curCheck, setCur]      = useState(null);
+  const [results, setResults]   = useState(null);
+  const [log, setLog]           = useState([]);
+  const [toast, setToast]       = useState(null);
+  const [pdfLoading, setPdfLoad]= useState(false);
+  const [proxyError, setProxyError] = useState(null);
+  const [ctrlSearch, setCtrlSearch] = useState("");
+  const [ctrlCatFilter, setCtrlCat] = useState("All");
+
+  const showToast = (msg, type="info") => { setToast({msg,type}); setTimeout(()=>setToast(null), 3800); };
+  const addLog = (msg, type="info") => {
+    const ts = new Date().toLocaleTimeString("en-US",{hour12:false});
+    setLog(l=>[...l.slice(-100),{ts,msg,type}]);
+  };
+
+  const downloadProxy = (type) => {
+    const files = {
+      python: { content:"#!/usr/bin/env python3\n\\\"\\\"\\\"SAP OData CORS Proxy - Python version. Run: python3 sap_proxy.py\\\"\\\"\\\"\nimport json, base64, urllib.request, urllib.error, ssl, sys\nfrom http.server import HTTPServer, BaseHTTPRequestHandler\nPORT = int(sys.argv[1]) if len(sys.argv)>1 else 3100\nCORS = {\"Access-Control-Allow-Origin\":\"*\",\"Access-Control-Allow-Methods\":\"GET,POST,OPTIONS\",\"Access-Control-Allow-Headers\":\"Content-Type,Authorization\"}\nclass H(BaseHTTPRequestHandler):\n    def log_message(self,f,*a): print(f\"  {self.log_date_time_string()} {f%a}\")\n    def send_cors(self,c):\n        self.send_response(c)\n        [self.send_header(k,v) for k,v in CORS.items()]\n        self.send_header(\"Content-Type\",\"application/json\"); self.end_headers()\n    def do_OPTIONS(self): self.send_cors(204); self.wfile.write(b\"\")\n    def do_GET(self):\n        if self.path in (\"/\",\"/health\"):\n            self.send_cors(200); self.wfile.write(json.dumps({\"status\":\"ok\",\"port\":PORT}).encode())\n        else: self.send_cors(404); self.wfile.write(b\"Not found\")\n    def do_POST(self):\n        if self.path!=\"/proxy\": self.send_cors(404); self.wfile.write(b\"\"); return\n        body=json.loads(self.rfile.read(int(self.headers.get(\"Content-Length\",0))))\n        t=body.get(\"url\",\"\"); u=body.get(\"username\",\"\"); pw=body.get(\"password\",\"\")\n        print(f\"  -> {t[:80]}\")\n        try:\n            tok=base64.b64encode(f\"{u}:{pw}\".encode()).decode()\n            ctx=ssl.create_default_context(); ctx.check_hostname=False; ctx.verify_mode=ssl.CERT_NONE\n            req=urllib.request.Request(t,headers={\"Authorization\":f\"Basic {tok}\",\"Accept\":\"application/json\"})\n            with urllib.request.urlopen(req,context=ctx,timeout=15) as r:\n                d=json.loads(r.read().decode())\n                self.send_cors(200); self.wfile.write(json.dumps({\"ok\":True,\"status\":r.status,\"data\":d}).encode())\n        except urllib.error.HTTPError as e:\n            try: ed=json.loads(e.read())\n            except: ed={}\n            self.send_cors(200); self.wfile.write(json.dumps({\"ok\":False,\"status\":e.code,\"data\":ed}).encode())\n        except Exception as e:\n            self.send_cors(502); self.wfile.write(json.dumps({\"ok\":False,\"error\":str(e)}).encode())\nprint(f\"\\n  SAP OData CORS Proxy (Python) on http://localhost:{PORT}\\n  Set Proxy URL -> http://localhost:{PORT}\\n\")\nHTTPServer((\"0.0.0.0\",PORT),H).serve_forever()\n", name:"sap_proxy.py", mime:"text/x-python" },
+      bat:    { content:"@echo off\r\ntitle SAP Proxy\r\necho Starting SAP OData CORS Proxy...\r\necho Set Proxy URL to: http://localhost:3100\r\nwhere python >nul 2>&1 && python sap_proxy.py && goto :eof\r\nwhere python3 >nul 2>&1 && python3 sap_proxy.py && goto :eof\r\nwhere node >nul 2>&1 && node sap-proxy-server.js && goto :eof\r\necho ERROR: Install Python from python.org or Node.js from nodejs.org\r\npause\r\n", name:"start-proxy.bat", mime:"text/plain" },
+      sh:     { content:"#!/bin/bash\necho 'Starting SAP OData CORS Proxy...'\necho 'Set Proxy URL to: http://localhost:3100'\ncommand -v python3 &>/dev/null && python3 sap_proxy.py && exit 0\ncommand -v python  &>/dev/null && python  sap_proxy.py && exit 0\ncommand -v node    &>/dev/null && node    sap-proxy-server.js && exit 0\necho 'ERROR: Install Python (python.org) or Node.js (nodejs.org)'\n", name:"start-proxy.sh", mime:"text/x-sh" },
+      node:   { content:"const http=require(\"http\"),https=require(\"https\"),url=require(\"url\");\nconst PORT=process.env.PORT||3100;\nconst CORS={\"Access-Control-Allow-Origin\":\"*\",\"Access-Control-Allow-Methods\":\"GET,POST,OPTIONS\",\"Access-Control-Allow-Headers\":\"Content-Type,Authorization\"};\nfunction fwd(t,u,p){return new Promise((res,rej)=>{const q=url.parse(t),lib=q.protocol===\"https:\"?https:http;const o={hostname:q.hostname,port:q.port||(q.protocol===\"https:\"?443:80),path:q.path,method:\"GET\",headers:{\"Authorization\":\"Basic \"+Buffer.from(u+\":\"+p).toString(\"base64\"),\"Accept\":\"application/json\"},timeout:15000,rejectUnauthorized:false};const r=lib.request(o,x=>{let b=\"\";x.on(\"data\",c=>b+=c);x.on(\"end\",()=>res({status:x.statusCode,body:b}));});r.on(\"timeout\",()=>{r.destroy();rej(new Error(\"Timed out\"));});r.on(\"error\",rej);r.end();});}\nhttp.createServer(async(req,res)=>{if(req.method===\"OPTIONS\"){res.writeHead(204,CORS);res.end();return;}if(req.method===\"GET\"&&(req.url===\"/\"||req.url===\"/health\")){res.writeHead(200,{...CORS,\"Content-Type\":\"application/json\"});res.end(JSON.stringify({status:\"ok\",port:PORT}));return;}if(req.method!==\"POST\"||req.url!==\"/proxy\"){res.writeHead(404,CORS);res.end(\"Not found\");return;}let b=\"\";req.on(\"data\",c=>b+=c);req.on(\"end\",async()=>{try{const{url:t,username:u,password:p}=JSON.parse(b);console.log(\"->\",t.slice(0,80));const r=await fwd(t,u||\"\",p||\"\");let d;try{d=JSON.parse(r.body)}catch{d={raw:r.body}}res.writeHead(200,{...CORS,\"Content-Type\":\"application/json\"});res.end(JSON.stringify({ok:r.status>=200&&r.status<300,status:r.status,data:d}));}catch(e){res.writeHead(502,{...CORS,\"Content-Type\":\"application/json\"});res.end(JSON.stringify({ok:false,error:e.message}));}});}).listen(PORT,\"0.0.0.0\",()=>{console.log(\"\\nSAP Proxy running on http://localhost:\"+PORT+\"\\n\");});\n", name:"sap-proxy-server.js", mime:"text/javascript" },
+    };
+    const dl = (key) => {
+      const f = files[key];
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(new Blob([f.content], {type:f.mime}));
+      a.download = f.name; a.click();
+    };
+    if (type === "all") { Object.keys(files).forEach(dl); showToast("All proxy files downloaded!", "success"); }
+    else { dl(type); showToast(`Downloaded ${files[type]?.name||type}`, "success"); }
+  };
+
+  const conn = connections.find(c=>c.id===activeConn);
+
+  /* ── CONNECTIONS ── */
+  const saveConn = (c) => {
+    if(!c.name||!c.host){showToast("Name and host required","error");return;}
+    const exists = connections.find(x=>x.id===c.id);
+    setConns(p=>exists?p.map(x=>x.id===c.id?c:x):[...p,{...c,id:Date.now()}]);
+    setEditConn(null); showToast(`Connection "${c.name}" saved`,"success");
+  };
+  /* ── SMART FETCH — proxy-aware ── */
+  const sapFetch = async (c, odataUrl) => {
+    const mode = c.mode || "proxy";
+
+    if (mode === "demo") throw new Error("DEMO_MODE");
+
+    if (mode === "proxy") {
+      // Route through local CORS proxy
+      const proxyUrl = (c.proxyUrl || "http://localhost:3100").replace(/\/$/, "");
+      const resp = await fetch(`${proxyUrl}/proxy`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: odataUrl, username: c.user, password: c.password }),
+        signal: AbortSignal.timeout(15000),
+      });
+      if (!resp.ok) throw new Error(`Proxy HTTP ${resp.status}`);
+      const envelope = await resp.json();
+      if (!envelope.ok) throw new Error(`SAP HTTP ${envelope.status} — ${JSON.stringify(envelope.data).slice(0,120)}`);
+      const d = envelope.data;
+      return d?.d?.results || d?.value || (Array.isArray(d) ? d : []);
+    }
+
+    // mode === "direct" — works only if SAP has CORS headers or same-origin
+    const resp = await fetch(odataUrl, {
+      headers: { "Authorization": "Basic " + btoa(`${c.user}:${c.password}`) },
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const j = await resp.json();
+    return j?.d?.results || j?.value || [];
+  };
+
+  const testConn = async (c) => {
+    const mode = c.mode || "proxy";
+    if (mode === "demo") { showToast("Demo mode — no connection needed","info"); return; }
+    if (mode === "proxy") {
+      const proxyBase = (c.proxyUrl || "http://localhost:3100").replace(/\/$/,"");
+      showToast(`Checking proxy at ${proxyBase}…`, "info");
+      try {
+        const ctrl = new AbortController();
+        const tid = setTimeout(() => ctrl.abort(), 4500);
+        const health = await fetch(`${proxyBase}/health`, { signal: ctrl.signal });
+        clearTimeout(tid);
+        if (!health.ok) throw new Error(`Proxy HTTP ${health.status}`);
+        setProxyError(null);
+        addLog(`Proxy OK at ${proxyBase}`, "success");
+      } catch (e) {
+        const msg = e.name === "AbortError" ? "Timed out (4.5s) — proxy not running" : e.message;
+        setProxyError({ url: proxyBase, err: msg });
+        showToast("Proxy unreachable — see Setup Guide", "error");
+        addLog(`Proxy unreachable: ${msg}`, "error");
+        return;
+      }
+      showToast("Proxy OK — testing SAP…", "info");
+      const sapUrl = `http://${c.host}:${c.port}/sap/opu/odata/sap/ZTEST_TABLE_SRV/InputsSet?$format=json`;
+      try {
+        await sapFetch(c, sapUrl);
+        showToast("✓ Proxy + SAP connection OK!", "success");
+        addLog("SAP connection verified via proxy", "success");
+      } catch (e) {
+        if (e.message && e.message.includes("SAP HTTP")) {
+          showToast(`Proxy OK, SAP error: ${e.message}`, "warn");
+        } else {
+          showToast(`SAP unreachable through proxy`, "error");
+        }
+      }
+      return;
+    }
+    const dUrl = `http://${c.host}:${c.port}/sap/opu/odata/sap/ZTEST_TABLE_SRV/InputsSet?$format=json`;
+    try {
+      const ctrl = new AbortController();
+      const tid = setTimeout(() => ctrl.abort(), 5000);
+      const r = await fetch(dUrl, { headers: { "Authorization": "Basic " + btoa(`${c.user}:${c.password}`) }, signal: ctrl.signal });
+      clearTimeout(tid);
+      r.ok ? showToast("✓ Direct connection OK!", "success") : showToast(`SAP HTTP ${r.status}`, "error");
+    } catch (e) {
+      showToast("Direct blocked (CORS) — switch to Proxy mode", "error");
+      addLog(`Direct failed: ${e.message}`, "error");
+    }
+  };
+
+  /* ── CONTROLS ── */
+  const saveCtrl = (ctrl) => {
+    const exists = controls.find(c=>c.id===ctrl.id);
+    setControls(p=>exists?p.map(c=>c.id===ctrl.id?ctrl:c):[...p,ctrl]);
+    setEditCtrl(null); showToast(`Control "${ctrl.name}" saved`,"success");
+  };
+  const deleteCtrl = (id) => {
+    if(controls.find(c=>c.id===id)?.builtIn){showToast("Cannot delete built-in controls","error");return;}
+    setControls(p=>p.filter(c=>c.id!==id)); showToast("Custom control deleted","info");
+  };
+  const toggleCtrl = (id) => setControls(p=>p.map(c=>c.id===id?{...c,enabled:!c.enabled}:c));
+
+  /* ── RUN ANALYSIS ── */
+  const runAnalysis = async () => {
+    if(!conn){showToast("Select a connection first","error");return;}
+    const enabled = controls.filter(c=>c.enabled);
+    if(!enabled.length){showToast("Enable at least one control","error");return;}
+
+    const mode = conn.mode || "proxy";
+    setRunning(true); setResults(null); setLog([]); setProg(0);
+
+    addLog(`Mode: ${mode.toUpperCase()} | System: ${conn.name} (${conn.host}:${conn.port})`, "info");
+    if (mode === "proxy") addLog(`Proxy: ${conn.proxyUrl || "http://localhost:3100"}`, "info");
+    if (mode === "demo")  addLog("Demo mode active — using built-in sample data", "warn");
+    addLog("─".repeat(50), "info");
+
+    const out = {};
+    let liveCount = 0, demoCount = 0;
+
+    for(let i=0; i<enabled.length; i++){
+      const ctrl = enabled[i];
+      setCur(ctrl.id);
+      setProg(Math.round(i / enabled.length * 100));
+      addLog(`[${String(i+1).padStart(2)}/${enabled.length}] ${ctrl.name}`, "info");
+      addLog(`     Table: ${ctrl.table} | Entity: ${ctrl.entity}`, "info");
+
+      await new Promise(r => setTimeout(r, 200 + Math.random()*300));
+
+      if (mode === "demo") {
+        out[ctrl.resultKey] = MOCK[ctrl.resultKey] || [];
+        addLog(`     ✓ Demo data loaded: ${out[ctrl.resultKey].length} records`, "success");
+        demoCount++;
+        continue;
+      }
+
+      const odataUrl = `http://${conn.host}:${conn.port}/sap/opu/odata/sap/ZTEST_TABLE_SRV/${ctrl.entity}?$format=json`;
+      try {
+        const data = await sapFetch(conn, odataUrl);
+        out[ctrl.resultKey] = data;
+        addLog(`     ✓ Live data: ${data.length} records`, "success");
+        liveCount++;
+      } catch(err) {
+        if (err.message === "DEMO_MODE") {
+          out[ctrl.resultKey] = MOCK[ctrl.resultKey] || [];
+          demoCount++;
+        } else {
+          const isDemoing = !!MOCK[ctrl.resultKey];
+          addLog(`     ⚠ ${err.message}`, "warn");
+          if (isDemoing) {
+            addLog(`     → Fallback: using demo data (${MOCK[ctrl.resultKey].length} records)`, "warn");
+            out[ctrl.resultKey] = MOCK[ctrl.resultKey];
+            demoCount++;
+          } else {
+            addLog(`     → No demo data available — skipped`, "warn");
+            out[ctrl.resultKey] = [];
+          }
+        }
+      }
+    }
+
+    setProg(100); setCur(null);
+    addLog("─".repeat(50), "info");
+    addLog(`Analysis complete: ${liveCount} live, ${demoCount} demo/fallback`, liveCount>0?"success":"warn");
+
+    setResults({...out, timestamp:Date.now(), conn:{...conn}, liveCount, demoCount});
+    setRunning(false); setView("results");
+    showToast(liveCount > 0 ? `Analysis complete — ${liveCount} live data sources` : "Analysis complete (demo data)", liveCount > 0 ? "success" : "warn");
+  };
+
+  /* ── PDF EXPORT ── */
+  const exportPDF = async () => {
+    if(!results){showToast("Run analysis first","error");return;}
+    setPdfLoad(true); showToast("Generating PDF…","info");
+    const riskScore = calcRisk();
+    try {
+      await generatePDF(results, controls, results.conn, riskScore);
+      showToast("PDF downloaded!","success");
+    } catch(e) {
+      showToast(`PDF error: ${e.message}`,"error");
+    }
+    setPdfLoad(false);
+  };
+
+  /* ── RISK CALC ── */
+  const calcRisk = () => {
+    if(!results)return 0;
+    let sc=0;
+    sc+=Math.min(((results.criticalAuths||[]).filter(r=>r.risk==="CRITICAL").length)*12,28);
+    sc+=Math.min(((results.sodConflicts||[]).filter(r=>r.risk==="CRITICAL").length)*8,20);
+    sc+=Math.min(((results.debugAccess||[]).filter(r=>r.risk==="CRITICAL").length)*10,18);
+    sc+=Math.min(((results.securityParams||[]).filter(p=>p.status==="FAIL").length)*2,14);
+    sc+=Math.min(((results.defaultUsers||[]).filter(r=>r.risk==="CRITICAL").length)*5,10);
+    sc+=((results.clientSettings||[]).filter(r=>r.risk==="CRITICAL").length)*3;
+    return Math.min(sc,100);
+  };
+  const riskScore = calcRisk();
+
+  const kpis = !results ? [] : [
+    {l:"Critical",  v:([...(results.criticalAuths||[]),...(results.sodConflicts||[]),...(results.debugAccess||[]),...(results.defaultUsers||[]),...(results.failedLogins||[])].filter(r=>r.risk==="CRITICAL")).length, c:"var(--red)"},
+    {l:"High",      v:([...(results.criticalAuths||[]),...(results.rfcSecurity||[]),...(results.sensitiveTableAccess||[]),...(results.firefighter||[])].filter(r=>r.risk==="HIGH")).length, c:"var(--orange)"},
+    {l:"Dormant",   v:(results.dormantUsers||[]).length, c:"var(--yellow)"},
+    {l:"Pwd Issues",v:(results.passwordAge||[]).length, c:"var(--yellow)"},
+    {l:"SoD Hits",  v:(results.sodConflicts||[]).length, c:"var(--orange)"},
+    {l:"Param Fail",v:(results.securityParams||[]).filter(p=>p.status!=="PASS").length, c:"var(--yellow)"},
+  ];
+
+  /* ── CONNECTION FORM ── */
+  const ConnForm = ({ init, onSave, onCancel }) => {
+    const [f, sf] = useState(init || { id:null, name:"", host:"", port:"8080", sid:"", client:"100", user:"", password:"", proxyUrl:"http://localhost:3100", mode:"proxy" });
+    const [showP, setShowP] = useState(false);
+    const [testing, setTesting] = useState(false);
+    const [testResult, setTestResult] = useState(null); // {ok, msg}
+
+    const fld = (k, label, ph, opts = {}) => (
+      <div style={opts.full ? {gridColumn:"1/-1"} : {}}>
+        <label style={{display:"block",fontSize:10,color:"var(--txt3)",marginBottom:5,fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase",fontFamily:"var(--display)"}}>{label}</label>
+        <input
+          type={opts.type || "text"}
+          disabled={!!opts.disabled}
+          style={{background:opts.disabled?"var(--bg4)":"var(--bg3)",border:"1px solid var(--bd2)",borderRadius:"var(--radius)",padding:"8px 11px",color:"var(--txt)",fontFamily:"var(--mono)",fontSize:12,outline:"none",width:"100%",cursor:opts.disabled?"not-allowed":"text"}}
+          value={f[k]} onChange={e => sf(p => ({...p, [k]: e.target.value}))} placeholder={ph}
+        />
+      </div>
+    );
+
+    const runTest = async () => {
+      setTesting(true); setTestResult(null);
+      try { await testConn(f); setTestResult({ok:true, msg:"Connection verified!"}); }
+      catch (e) { setTestResult({ok:false, msg:e.message}); }
+      setTesting(false);
+    };
+
+    const modeColors = { proxy:"rgba(0,212,255,.1)", direct:"rgba(249,115,22,.08)", demo:"rgba(168,85,247,.08)" };
+    const modeBorders = { proxy:"rgba(0,212,255,.3)", direct:"rgba(249,115,22,.25)", demo:"rgba(168,85,247,.25)" };
+    const modeIcons = { proxy:"🔁", direct:"⚡", demo:"🧪" };
+
+    return (
+      <div className="scale-in" style={{background:"var(--bg3)",border:"1px solid rgba(0,212,255,.25)",borderRadius:14,padding:20,marginBottom:14}}>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16}}>
+          <span style={{fontFamily:"var(--display)",fontWeight:700,color:"var(--cyan)",fontSize:13}}>{f.id ? "Edit Connection" : "New Connection"}</span>
+          <button onClick={onCancel} style={{background:"none",border:"none",color:"var(--txt3)"}}><Icons.X size={15}/></button>
+        </div>
+
+        {/* Mode selector */}
+        <div style={{marginBottom:16}}>
+          <label style={{display:"block",fontSize:10,color:"var(--txt3)",marginBottom:8,fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase",fontFamily:"var(--display)"}}>Connection Mode</label>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
+            {[
+              {v:"proxy",  l:"Proxy Mode",  sub:"Via local proxy server (recommended)"},
+              {v:"direct", l:"Direct Mode", sub:"SAP must send CORS headers"},
+              {v:"demo",   l:"Demo Mode",   sub:"Use built-in sample data"},
+            ].map(m => (
+              <div key={m.v} onClick={() => sf(p=>({...p,mode:m.v}))} style={{padding:"10px 12px",borderRadius:10,border:`1px solid ${f.mode===m.v?modeBorders[m.v]:"var(--bd)"}`,background:f.mode===m.v?modeColors[m.v]:"transparent",cursor:"pointer",transition:"all .15s"}}>
+                <div style={{fontSize:14,marginBottom:3}}>{modeIcons[m.v]}</div>
+                <div style={{fontSize:11.5,fontWeight:700,color:f.mode===m.v?"var(--txt)":"var(--txt2)",fontFamily:"var(--display)"}}>{m.l}</div>
+                <div style={{fontSize:10,color:"var(--txt3)",marginTop:2,lineHeight:1.4}}>{m.sub}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+          {fld("name","Connection Name","Production SAP (PRD)",{full:true})}
+          {fld("host","Server / IP","10.10.19.103",{disabled:f.mode==="demo"})}
+          {fld("port","HTTP Port","8080",{disabled:f.mode==="demo"})}
+          {fld("sid","System ID (SID)","PRD",{disabled:f.mode==="demo"})}
+          {fld("client","Client","100",{disabled:f.mode==="demo"})}
+          {fld("user","SAP User ID","SAPUSER",{disabled:f.mode==="demo"})}
+
+          {/* Password */}
+          <div style={{opacity:f.mode==="demo"?0.4:1}}>
+            <label style={{display:"block",fontSize:10,color:"var(--txt3)",marginBottom:5,fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase",fontFamily:"var(--display)"}}>Password</label>
+            <div style={{position:"relative"}}>
+              <input type={showP?"text":"password"} disabled={f.mode==="demo"} style={{background:"var(--bg3)",border:"1px solid var(--bd2)",borderRadius:"var(--radius)",padding:"8px 36px 8px 11px",color:"var(--txt)",fontFamily:"var(--mono)",fontSize:12,outline:"none",width:"100%"}} value={f.password} onChange={e=>sf(p=>({...p,password:e.target.value}))} placeholder="••••••••"/>
+              <button onClick={()=>setShowP(p=>!p)} style={{position:"absolute",right:9,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",color:"var(--txt3)",padding:2}}>{showP?<Icons.EyeOff size={13}/>:<Icons.Eye size={13}/>}</button>
+            </div>
+          </div>
+
+          {/* Proxy URL — shown only in proxy mode */}
+          {f.mode==="proxy" && (
+            <div style={{gridColumn:"1/-1",background:"rgba(0,212,255,.04)",border:"1px solid rgba(0,212,255,.2)",borderRadius:10,padding:"12px 14px"}}>
+              <label style={{display:"block",fontSize:10,color:"var(--cyan)",marginBottom:5,fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase",fontFamily:"var(--display)"}}>Local Proxy URL</label>
+              <input style={{background:"var(--bg4)",border:"1px solid rgba(0,212,255,.25)",borderRadius:"var(--radius)",padding:"8px 11px",color:"var(--cyan)",fontFamily:"var(--mono)",fontSize:12,outline:"none",width:"100%"}}
+                value={f.proxyUrl} onChange={e=>sf(p=>({...p,proxyUrl:e.target.value}))} placeholder="http://localhost:3100"/>
+              <div style={{fontSize:10,color:"var(--txt3)",marginTop:6}}>
+                Run <code style={{color:"var(--green2)",background:"var(--bg)",padding:"1px 5px",borderRadius:4,fontSize:10}}>node sap-proxy-server.js</code> on this machine first — download it below.
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Test result banner */}
+        {testResult && (
+          <div style={{marginTop:12,padding:"9px 14px",background:testResult.ok?"rgba(16,201,138,.08)":"rgba(240,64,64,.08)",border:`1px solid ${testResult.ok?"rgba(16,201,138,.25)":"rgba(240,64,64,.25)"}`,borderRadius:9,display:"flex",alignItems:"center",gap:8,fontSize:12,color:testResult.ok?"var(--green2)":"var(--red2)"}}>
+            {testResult.ok ? <Icons.Check size={14}/> : <Icons.X size={14}/>}
+            {testResult.msg}
+          </div>
+        )}
+
+        <div style={{display:"flex",gap:8,marginTop:14}}>
+          <button onClick={()=>onSave(f)} style={{display:"flex",alignItems:"center",gap:6,padding:"8px 16px",background:"var(--cyan)",color:"#000",borderRadius:9,fontWeight:700,fontSize:13}}><Icons.Save size={13}/>Save</button>
+          <button onClick={runTest} disabled={testing} style={{display:"flex",alignItems:"center",gap:6,padding:"8px 14px",background:"var(--bg4)",border:"1px solid var(--bd2)",borderRadius:9,color:testing?"var(--txt3)":"var(--txt2)",fontSize:13}}>
+            {testing?<><Icons.Loader size={13} cls="spin-icon"/>Testing…</>:<><Icons.Refresh size={13}/>Test Connection</>}
+          </button>
+          <button onClick={onCancel} style={{display:"flex",alignItems:"center",gap:6,padding:"8px 12px",background:"transparent",border:"1px solid var(--bd)",borderRadius:9,color:"var(--txt3)",fontSize:13}}><Icons.X size={13}/>Cancel</button>
+        </div>
+      </div>
+    );
+  };
+
+  /* ── GAUGE ── */
+  /* -- PROXY SETUP MODAL -- */
+  const ProxySetupModal = ({ err, onClose }) => {
+    const [retrying, setRetrying] = useState(false);
+    const retry = async () => { setRetrying(true); if(conn) await testConn(conn); setRetrying(false); };
+    const files = [
+      {k:"python",e:"🐍",label:"sap_proxy.py",sub:"Python (no npm needed)"},
+      {k:"node",e:"🟩",label:"sap-proxy-server.js",sub:"Node.js alternative"},
+      {k:"bat",e:"🪟",label:"start-proxy.bat",sub:"Windows launcher"},
+      {k:"sh",e:"🐧",label:"start-proxy.sh",sub:"Mac/Linux launcher"},
+    ];
+    const steps = [
+      {n:1,t:"Download proxy files",s:"Click buttons below. Python version requires no install."},
+      {n:2,t:"Put files in any folder",s:"Place sap_proxy.py and start-proxy.bat in same folder."},
+      {n:3,t:"Run the launcher",s:"Windows: double-click start-proxy.bat  |  Mac/Linux: sh start-proxy.sh"},
+      {n:4,t:"Click Retry",s:"Once terminal shows: SAP Proxy running on http://localhost:3100"},
+    ];
+    return (
+      <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.8)",zIndex:9998,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+        <div className="scale-in" style={{background:"var(--bg2)",border:"1px solid rgba(240,64,64,.35)",borderRadius:18,padding:28,maxWidth:580,width:"100%",maxHeight:"90vh",overflowY:"auto"}}>
+          <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",marginBottom:20}}>
+            <div style={{display:"flex",alignItems:"center",gap:12}}>
+              <div style={{width:42,height:42,borderRadius:12,background:"rgba(240,64,64,.12)",border:"1px solid rgba(240,64,64,.3)",display:"flex",alignItems:"center",justifyContent:"center",color:"var(--red)",flexShrink:0}}><Icons.Server size={20}/></div>
+              <div>
+                <div style={{fontFamily:"var(--display)",fontWeight:800,fontSize:16,color:"var(--txt)"}}>Proxy Server Not Running</div>
+                <div style={{fontSize:11,color:"var(--txt3)",marginTop:3,fontFamily:"var(--mono)"}}>{err ? err.url : "http://localhost:3100"} — {err ? err.err : "Failed to connect"}</div>
+              </div>
+            </div>
+            <button onClick={onClose} style={{background:"none",border:"none",color:"var(--txt3)",padding:4}}><Icons.X size={18}/></button>
+          </div>
+          <div style={{background:"rgba(59,130,246,.07)",border:"1px solid rgba(59,130,246,.2)",borderRadius:10,padding:"12px 16px",marginBottom:18,fontSize:12.5,color:"var(--txt2)",lineHeight:1.7}}>
+            <strong style={{color:"var(--blue2)"}}>Why this happens:</strong> Browsers block direct HTTP calls to SAP (CORS policy). The proxy runs locally on your PC and forwards requests — no data leaves your network.
+          </div>
+          {steps.map(st=>(
+            <div key={st.n} style={{display:"flex",gap:12,padding:"9px 13px",background:"var(--bg3)",borderRadius:9,border:"1px solid var(--bd)",marginBottom:8}}>
+              <div style={{width:22,height:22,borderRadius:"50%",background:"rgba(0,212,255,.1)",border:"1px solid rgba(0,212,255,.25)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:700,color:"var(--cyan)",flexShrink:0}}>{st.n}</div>
+              <div><div style={{fontSize:12.5,fontWeight:700,color:"var(--txt)",fontFamily:"var(--display)"}}>{st.t}</div><div style={{fontSize:11,color:"var(--txt3)",marginTop:1}}>{st.s}</div></div>
+            </div>
+          ))}
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,margin:"16px 0"}}>
+            {files.map(f=>(
+              <button key={f.k} onClick={()=>downloadProxy(f.k)} style={{display:"flex",alignItems:"center",gap:9,padding:"10px 13px",background:"var(--bg3)",border:"1px solid var(--bd2)",borderRadius:9,color:"var(--txt2)",fontSize:12,fontWeight:600,cursor:"pointer",textAlign:"left"}}>
+                <span style={{fontSize:18}}>{f.e}</span>
+                <span><strong style={{color:"var(--txt)"}}>{f.label}</strong><br/><span style={{fontSize:10,fontWeight:400,color:"var(--txt3)"}}>{f.sub}</span></span>
+              </button>
+            ))}
+          </div>
+          <div style={{background:"var(--bg)",border:"1px solid var(--bd)",borderRadius:10,padding:"11px 15px",marginBottom:14,fontFamily:"var(--mono)",fontSize:11}}>
+            <div style={{color:"var(--txt3)",marginBottom:5,fontSize:9.5,textTransform:"uppercase",letterSpacing:"0.08em"}}>Expected terminal output after running:</div>
+            <div style={{color:"var(--green2)"}}>  SAP OData CORS Proxy (Python) on http://localhost:3100</div>
+            <div style={{color:"var(--green2)"}}>  Set Proxy URL in app -&gt; http://localhost:3100</div>
+          </div>
+          <div style={{background:"rgba(168,85,247,.06)",border:"1px solid rgba(168,85,247,.2)",borderRadius:9,padding:"10px 14px",marginBottom:16,fontSize:12,color:"var(--txt2)"}}>
+            <strong style={{color:"#c4b5fd"}}>Just want to explore?</strong> Edit connection → switch to <strong>Demo Mode</strong> (no proxy needed).
+          </div>
+          <div style={{display:"flex",gap:10}}>
+            <button onClick={retry} disabled={retrying} style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",gap:8,padding:"11px",background:retrying?"var(--bg4)":"var(--cyan)",color:retrying?"var(--txt3)":"#000",borderRadius:10,fontWeight:700,fontSize:13,cursor:retrying?"not-allowed":"pointer"}}>
+              {retrying ? <><Icons.Loader size={14} cls="spin-icon"/>Checking proxy…</> : <><Icons.Refresh size={14}/>Retry Connection</>}
+            </button>
+            <button onClick={()=>{onClose();setView("connections");}} style={{padding:"11px 16px",background:"var(--bg3)",border:"1px solid var(--bd2)",borderRadius:10,color:"var(--txt2)",fontSize:13,cursor:"pointer"}}>Edit Connection</button>
+            <button onClick={onClose} style={{padding:"11px 14px",background:"transparent",border:"1px solid var(--bd)",borderRadius:10,color:"var(--txt3)",fontSize:13,cursor:"pointer"}}>Dismiss</button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const Gauge = ({score}) => {
+    const a=-135+(score/100)*270, rc=score>75?"#f04040":score>50?"#f97316":score>25?"#f5c542":"#10c98a";
+    return (
+      <svg viewBox="0 0 130 80" style={{width:130,height:80}}>
+        <defs><linearGradient id="g1" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" stopColor="#10c98a"/><stop offset="50%" stopColor="#f5c542"/><stop offset="100%" stopColor="#f04040"/></linearGradient></defs>
+        <path d="M12 72 A52 52 0 0 1 118 72" fill="none" stroke="rgba(30,45,68,.8)" strokeWidth="9" strokeLinecap="round"/>
+        <path d="M12 72 A52 52 0 0 1 118 72" fill="none" stroke="url(#g1)" strokeWidth="9" strokeLinecap="round" opacity=".8"/>
+        <g transform={`translate(65,72) rotate(${a})`}>
+          <line y1="2" y2="-38" stroke={rc} strokeWidth="2.5" strokeLinecap="round"/>
+          <circle r="5" fill={rc}/>
+        </g>
+        <text x="65" y="66" textAnchor="middle" fill={rc} fontSize="20" fontWeight="700" fontFamily="'IBM Plex Mono',monospace">{score}</text>
+      </svg>
+    );
+  };
+
+  /* ── SIDEBAR ── */
+  const NAV = [
+    {id:"dashboard",  l:"Dashboard",        Ico:Icons.BarChart},
+    {id:"connections",l:"Connections",      Ico:Icons.Server},
+    {id:"controls",   l:"Controls Config",  Ico:Icons.Sliders},
+    {id:"analysis",   l:"Run Analysis",     Ico:Icons.Play},
+    {id:"results",    l:"Results",          Ico:Icons.Shield, badge:results?kpis[0]?.v:null},
+    {id:"log",        l:"Exec Log",         Ico:Icons.List,   badge:log.filter(l=>l.type==="warn").length||null},
+  ];
+
+  const filteredCtrl = controls.filter(c => {
+    const matchSearch = c.name.toLowerCase().includes(ctrlSearch.toLowerCase()) || c.table.toLowerCase().includes(ctrlSearch.toLowerCase());
+    const matchCat = ctrlCatFilter==="All" || c.cat===ctrlCatFilter;
+    return matchSearch && matchCat;
+  });
+
+  const ctrlCats = ["All", ...new Set(controls.map(c=>c.cat))];
+
+  return (
+    <>
+      <div style={{display:"flex",height:"100vh",background:"var(--bg)",overflow:"hidden"}}>
+
+        {/* ══ SIDEBAR ══════════════════════════════════════════════ */}
+        <div style={{width:215,background:"var(--bg2)",borderRight:"1px solid var(--bd)",display:"flex",flexDirection:"column",flexShrink:0}}>
+          {/* Logo */}
+          <div style={{padding:"16px 14px 12px",borderBottom:"1px solid var(--bd)"}}>
+            <div style={{display:"flex",alignItems:"center",gap:10}}>
+              <div style={{width:36,height:36,borderRadius:10,background:"rgba(0,212,255,.09)",border:"1px solid rgba(0,212,255,.25)",display:"flex",alignItems:"center",justifyContent:"center",color:"var(--cyan)"}}>
+                <Icons.Shield size={18}/>
+              </div>
+              <div>
+                <div style={{fontFamily:"var(--display)",fontWeight:800,fontSize:12.5,color:"var(--txt)",letterSpacing:"0.02em"}}>SAP SECURITY</div>
+                <div style={{fontSize:9.5,color:"var(--txt3)",letterSpacing:"0.12em",fontFamily:"var(--display)"}}>ANALYZER v3.0</div>
+              </div>
+            </div>
+          </div>
+
+          {/* Active conn */}
+          {conn && (
+            <div style={{margin:"10px 10px 2px",background:"rgba(16,201,138,.06)",border:"1px solid rgba(16,201,138,.18)",borderRadius:9,padding:"8px 10px"}}>
+              <div style={{display:"flex",alignItems:"center",gap:6}}>
+                <div style={{width:6,height:6,borderRadius:"50%",background:"var(--green)"}} className="pulse"/>
+                <span style={{fontSize:11.5,color:"var(--green2)",fontWeight:600,fontFamily:"var(--display)"}}>{conn.name}</span>
+              </div>
+              <div style={{fontSize:10,color:"var(--txt3)",marginTop:2,fontFamily:"var(--mono)"}}>{conn.host} · {conn.sid}/{conn.client}</div>
+            </div>
+          )}
+
+          {/* Nav items */}
+          <nav style={{padding:"8px 6px 0",flex:1}}>
+            {NAV.map(n => {
+              const active = view===n.id;
+              return (
+                <button key={n.id} onClick={()=>setView(n.id)} style={{display:"flex",alignItems:"center",gap:9,width:"100%",padding:"9px 10px",borderRadius:9,border:"none",cursor:"pointer",background:active?"rgba(0,212,255,.1)":"transparent",color:active?"var(--cyan)":"var(--txt2)",fontSize:12.5,fontWeight:active?600:400,fontFamily:"var(--font)",transition:"all .15s",marginBottom:2,textAlign:"left"}}
+                  onMouseEnter={e=>{if(!active)e.currentTarget.style.background="rgba(0,212,255,.04)"}}
+                  onMouseLeave={e=>{if(!active)e.currentTarget.style.background="transparent"}}>
+                  <n.Ico size={14}/>
+                  <span style={{flex:1}}>{n.l}</span>
+                  {n.badge>0 && <span style={{background:"rgba(249,115,22,.2)",color:"var(--orange2)",borderRadius:10,fontSize:9.5,padding:"1px 6px",fontFamily:"var(--mono)",fontWeight:700}}>{n.badge}</span>}
+                  {active && <div style={{width:3,height:18,background:"var(--cyan)",borderRadius:2,marginLeft:4}}/>}
+                </button>
+              );
+            })}
+          </nav>
+
+          {/* Bottom exports */}
+          <div style={{padding:"0 8px 14px",display:"flex",flexDirection:"column",gap:6}}>
+            {results && (
+              <>
+                <button onClick={exportPDF} disabled={pdfLoading} style={{display:"flex",alignItems:"center",justifyContent:"center",gap:7,padding:"9px",borderRadius:9,background:pdfLoading?"var(--bg4)":"rgba(240,64,64,.1)",border:"1px solid rgba(240,64,64,.25)",color:pdfLoading?"var(--txt3)":"var(--red2)",fontWeight:700,fontSize:12,cursor:pdfLoading?"not-allowed":"pointer"}}>
+                  {pdfLoading?<><Icons.Loader size={13}/>Generating…</>:<><Icons.PDF size={13}/>Export PDF Report</>}
+                </button>
+              </>
+            )}
+            <div style={{fontSize:10,color:"var(--txt4)",textAlign:"center",fontFamily:"var(--mono)",marginTop:4}}>
+              {controls.filter(c=>c.enabled).length}/{controls.length} controls active
+            </div>
+            {conn && conn.mode==="proxy" && (
+              <div onClick={()=>{if(proxyError)setProxyError(proxyError);else testConn(conn);}}
+                style={{margin:"4px 0 0",padding:"5px 10px",borderRadius:8,cursor:"pointer",
+                  background:proxyError?"rgba(240,64,64,.08)":"rgba(16,201,138,.06)",
+                  border:`1px solid ${proxyError?"rgba(240,64,64,.25)":"rgba(16,201,138,.2)"}`,
+                  display:"flex",alignItems:"center",gap:7}}>
+                <div style={{width:6,height:6,borderRadius:"50%",flexShrink:0,
+                  background:proxyError?"var(--red)":"var(--green)"}} className={proxyError?"":"pulse"}/>
+                <span style={{fontSize:10,fontWeight:600,
+                  color:proxyError?"var(--red2)":"var(--green2)"}}>{proxyError?"Proxy offline — click":"Proxy ready"}</span>
+              </div>
+            )}
+
+          </div>
+        </div>
+
+        {/* ══ MAIN ═════════════════════════════════════════════════ */}
+        <div style={{flex:1,overflow:"auto",display:"flex",flexDirection:"column"}}>
+
+          {/* Top bar */}
+          <div style={{padding:"13px 26px",borderBottom:"1px solid var(--bd)",background:"var(--bg2)",display:"flex",alignItems:"center",justifyContent:"space-between",flexShrink:0}}>
+            <div>
+              <h1 style={{fontFamily:"var(--display)",fontSize:17,fontWeight:800,color:"var(--txt)",margin:0,letterSpacing:"-0.01em"}}>
+                {{dashboard:"Security Dashboard",connections:"Connection Manager",controls:"Controls Configuration",analysis:"Run Analysis",results:"Analysis Results",log:"Execution Log"}[view]}
+              </h1>
+              <p style={{fontSize:11.5,color:"var(--txt3)",margin:"2px 0 0",fontFamily:"var(--mono)"}}>
+                {{
+                  dashboard:"Executive risk posture overview",
+                  connections:"Manage SAP OData connections",
+                  controls:"Configure, add and tune security controls",
+                  analysis:"Select controls and execute analysis",
+                  results: results?`${new Date(results.timestamp).toLocaleString()} · ${results.conn?.name}`:"No results yet",
+                  log:"Real-time OData call trace and execution log",
+                }[view]}
+              </p>
+            </div>
+            {results && (
+              <button onClick={exportPDF} disabled={pdfLoading} style={{display:"flex",alignItems:"center",gap:7,padding:"9px 18px",background:pdfLoading?"var(--bg4)":"var(--red)",color:"#fff",borderRadius:9,fontWeight:700,fontSize:13,cursor:pdfLoading?"not-allowed":"pointer",opacity:pdfLoading?0.6:1}}>
+                {pdfLoading?<><Icons.Loader size={14}/>Generating PDF…</>:<><Icons.PDF size={14}/>Export PDF</>}
+              </button>
+            )}
+          </div>
+
+          {/* Page content */}
+          <div style={{padding:"22px 26px",flex:1,overflowY:"auto"}}>
+
+            {/* ══ DASHBOARD ══════════════════════════════════════ */}
+            {view==="dashboard" && (
+              <div className="fade-up">
+                {!results ? (
+                  <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",height:400,gap:14}}>
+                    <div style={{width:80,height:80,borderRadius:22,background:"rgba(0,212,255,.07)",border:"1px solid rgba(0,212,255,.18)",display:"flex",alignItems:"center",justifyContent:"center",color:"var(--cyan)"}}>
+                      <Icons.Shield size={34}/>
+                    </div>
+                    <h2 style={{fontFamily:"var(--display)",fontSize:20,fontWeight:800,color:"var(--txt)",margin:0}}>Ready to Analyze</h2>
+                    <p style={{color:"var(--txt3)",fontSize:14,margin:0,fontFamily:"var(--font)"}}>Configure your controls, connect to SAP, and run the analysis.</p>
+                    <div style={{display:"flex",gap:10,marginTop:8}}>
+                      <button onClick={()=>setView("controls")} style={{display:"flex",alignItems:"center",gap:7,padding:"11px 22px",background:"rgba(168,85,247,.1)",border:"1px solid rgba(168,85,247,.3)",borderRadius:10,color:"#a855f7",fontWeight:700,fontSize:13}}><Icons.Sliders size={14}/>Configure Controls</button>
+                      <button onClick={()=>setView("analysis")} style={{display:"flex",alignItems:"center",gap:7,padding:"11px 22px",background:"var(--cyan)",color:"#000",borderRadius:10,fontWeight:700,fontSize:13}}><Icons.Play size={14}/>Run Analysis</button>
+                    </div>
+                  </div>
+                ) : (
+                  <div style={{display:"grid",gridTemplateColumns:"160px 1fr",gap:18}}>
+                    {/* Risk gauge */}
+                    <div style={{background:"var(--bg2)",border:"1px solid var(--bd)",borderRadius:14,padding:"18px 14px",display:"flex",flexDirection:"column",alignItems:"center"}}>
+                      <div style={{fontSize:9.5,color:"var(--txt3)",letterSpacing:"0.1em",textTransform:"uppercase",fontFamily:"var(--display)",fontWeight:700,marginBottom:10}}>Risk Score</div>
+                      <Gauge score={riskScore}/>
+                      <div style={{marginTop:6,fontSize:11,color:"var(--txt3)",fontFamily:"var(--mono)"}}>{riskScore>75?"Critical":riskScore>50?"High":riskScore>25?"Medium":"Low"} Risk</div>
+                    </div>
+                    {/* KPIs */}
+                    <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:12}}>
+                      {kpis.map(k=>(
+                        <div key={k.l} style={{background:"var(--bg2)",border:"1px solid var(--bd)",borderRadius:12,padding:"16px 18px"}}>
+                          <div style={{fontSize:10,color:"var(--txt3)",textTransform:"uppercase",letterSpacing:"0.09em",fontFamily:"var(--display)",fontWeight:700,marginBottom:8}}>{k.l}</div>
+                          <div style={{fontSize:38,fontWeight:700,fontFamily:"var(--mono)",color:k.c,lineHeight:1}}>{k.v}</div>
+                        </div>
+                      ))}
+                    </div>
+                    {/* Control status grid */}
+                    <div style={{gridColumn:"1/-1",background:"var(--bg2)",border:"1px solid var(--bd)",borderRadius:14,padding:18}}>
+                      <div style={{fontFamily:"var(--display)",fontWeight:700,fontSize:12,color:"var(--txt2)",marginBottom:14,textTransform:"uppercase",letterSpacing:"0.08em"}}>Control Status Matrix</div>
+                      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(200px,1fr))",gap:9}}>
+                        {controls.filter(c=>c.enabled).map(ctrl=>{
+                          const d=results[ctrl.resultKey];
+                          const cnt=Array.isArray(d)?d.length:0;
+                          const crit=Array.isArray(d)?d.filter(r=>r.risk==="CRITICAL"||r.status==="FAIL").length:0;
+                          const st=!d?"PENDING":cnt===0?"PASS":crit>0?"CRITICAL":"HIGH";
+                          const sc=s(st);
+                          return (
+                            <div key={ctrl.id} onClick={()=>setView("results")} style={{display:"flex",alignItems:"center",gap:9,padding:"9px 12px",borderRadius:9,background:sc.bg,border:`1px solid ${sc.bd}`,cursor:"pointer",transition:"all .15s"}}
+                              onMouseEnter={e=>e.currentTarget.style.transform="translateY(-1px)"}
+                              onMouseLeave={e=>e.currentTarget.style.transform="none"}>
+                              <div style={{flexShrink:0,color:sc.txt}}><Icons.Shield size={13}/></div>
+                              <div style={{flex:1,minWidth:0}}>
+                                <div style={{fontSize:11.5,fontWeight:600,color:"var(--txt)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",fontFamily:"var(--display)"}}>{ctrl.name}</div>
+                                <div style={{fontSize:9.5,color:"var(--txt3)",fontFamily:"var(--mono)"}}>{ctrl.table}</div>
+                              </div>
+                              <span style={{fontSize:11,fontWeight:700,fontFamily:"var(--mono)",color:sc.txt}}>{cnt}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* ══ CONNECTIONS ═══════════════════════════════════ */}
+            {view==="connections" && (
+              <div className="fade-up" style={{maxWidth:680}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:18}}>
+                  <span style={{fontSize:12.5,color:"var(--txt3)",fontFamily:"var(--mono)"}}>{connections.length} connection(s)</span>
+                  <button onClick={()=>setEditConn({})} style={{display:"flex",alignItems:"center",gap:6,padding:"8px 16px",background:"rgba(0,212,255,.09)",border:"1px solid rgba(0,212,255,.25)",borderRadius:9,color:"var(--cyan)",fontSize:12.5,fontWeight:600}}><Icons.Plus size={13}/>New Connection</button>
+                </div>
+                {editConn && <ConnForm init={editConn.id?editConn:null} onSave={saveConn} onCancel={()=>setEditConn(null)}/>}
+                <div style={{display:"flex",flexDirection:"column",gap:9}}>
+                  {connections.map(c=>(
+                    <div key={c.id} onClick={()=>setActive(c.id)} style={{display:"flex",alignItems:"center",gap:13,padding:"13px 16px",borderRadius:12,border:`1px solid ${activeConn===c.id?"rgba(0,212,255,.35)":"var(--bd)"}`,background:activeConn===c.id?"rgba(0,212,255,.04)":"var(--bg2)",cursor:"pointer",transition:"all .15s"}}>
+                      <div style={{width:10,height:10,borderRadius:"50%",background:activeConn===c.id?"var(--cyan)":"var(--bd3)",flexShrink:0,transition:"all .15s"}}/>
+                      <div style={{flex:1}}>
+                        <div style={{fontFamily:"var(--display)",fontWeight:700,fontSize:13.5,color:"var(--txt)"}}>{c.name}</div>
+                        <div style={{fontSize:11,color:"var(--txt3)",fontFamily:"var(--mono)",marginTop:2}}>{c.host}:{c.port} · SID:<span style={{color:"var(--cyan2)"}}>{c.sid||"—"}</span> · Client:<span style={{color:"var(--cyan2)"}}>{c.client}</span> · {c.user}
+                          {" "}<span style={{padding:"1px 7px",borderRadius:10,fontSize:9.5,fontWeight:700,fontFamily:"var(--display)",background:c.mode==="proxy"?"rgba(0,212,255,.12)":c.mode==="demo"?"rgba(168,85,247,.12)":"rgba(249,115,22,.1)",color:c.mode==="proxy"?"var(--cyan)":c.mode==="demo"?"#a855f7":"var(--orange)",border:`1px solid ${c.mode==="proxy"?"rgba(0,212,255,.25)":c.mode==="demo"?"rgba(168,85,247,.25)":"rgba(249,115,22,.2)"}`}}>{(c.mode||"proxy").toUpperCase()}</span>
+                        </div>
+                      </div>
+                      <div style={{display:"flex",gap:5}}>
+                        <button onClick={e=>{e.stopPropagation();testConn(c);}} style={{padding:"5px 10px",background:"var(--bg3)",border:"1px solid var(--bd2)",borderRadius:7,color:"var(--txt2)",fontSize:11,display:"flex",alignItems:"center",gap:4}}><Icons.Refresh size={11}/>Test</button>
+                        <button onClick={e=>{e.stopPropagation();setEditConn({...c});}} style={{padding:"6px 8px",background:"var(--bg3)",border:"1px solid var(--bd2)",borderRadius:7,color:"var(--txt3)"}}><Icons.Edit size={12}/></button>
+                        <button onClick={e=>{e.stopPropagation();setConns(p=>p.filter(x=>x.id!==c.id));if(activeConn===c.id)setActive(null);}} style={{padding:"6px 8px",background:"transparent",border:"1px solid transparent",borderRadius:7,color:"var(--txt3)"}} onMouseEnter={e=>{e.currentTarget.style.color="var(--red)";e.currentTarget.style.background="rgba(240,64,64,.09)";}} onMouseLeave={e=>{e.currentTarget.style.color="var(--txt3)";e.currentTarget.style.background="transparent";}}><Icons.Trash size={12}/></button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                {/* OData info box */}
+                {conn && (
+                  <div style={{marginTop:24,background:"var(--bg2)",border:"1px solid var(--bd)",borderRadius:12,padding:18}}>
+                    <div style={{fontFamily:"var(--display)",fontWeight:700,fontSize:11,color:"var(--txt3)",textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:10}}>OData Service Base URL</div>
+                    <code style={{display:"block",fontSize:11.5,color:"var(--cyan)",background:"var(--bg3)",padding:"10px 13px",borderRadius:8,border:"1px solid var(--bd2)",wordBreak:"break-all"}}>
+                      http://{conn.host}:{conn.port}/sap/opu/odata/sap/ZTEST_TABLE_SRV/
+                    </code>
+                    <div style={{marginTop:10,fontSize:10.5,color:"var(--txt4)",fontFamily:"var(--mono)"}}>Auth: Basic Auth · Format: $format=json · Method: GET</div>
+                  </div>
+                )}
+
+                {/* ── CORS SETUP GUIDE ── */}
+                <div style={{marginTop:22,background:"rgba(0,212,255,.04)",border:"1px solid rgba(0,212,255,.2)",borderRadius:14,padding:20}}>
+                  <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:14}}>
+                    <div style={{width:28,height:28,borderRadius:8,background:"rgba(0,212,255,.1)",border:"1px solid rgba(0,212,255,.25)",display:"flex",alignItems:"center",justifyContent:"center",color:"var(--cyan)"}}>
+                      <Icons.Info size={14}/>
+                    </div>
+                    <div>
+                      <div style={{fontFamily:"var(--display)",fontWeight:700,fontSize:13,color:"var(--cyan)"}}>Why CORS Errors Happen</div>
+                      <div style={{fontSize:11,color:"var(--txt3)",marginTop:1}}>And how to connect to your real SAP system</div>
+                    </div>
+                  </div>
+
+                  <p style={{fontSize:12.5,color:"var(--txt2)",lineHeight:1.7,marginBottom:16}}>
+                    Browsers enforce <strong style={{color:"var(--txt)"}}>Same-Origin Policy</strong> — a security rule that blocks web pages from making direct HTTP requests to a different host (your SAP server). This is <em>not</em> a bug in this app; it's browser security protecting you. The solution is a <strong style={{color:"var(--cyan)"}}>local CORS proxy</strong> — a tiny Node.js server on your machine that the browser calls, which then forwards the request to SAP.
+                  </p>
+
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:12,marginBottom:18}}>
+                    {[
+                      {n:"1",title:"Download the proxy",body:"Download sap-proxy-server.js (no dependencies — pure Node.js built-ins).",color:"var(--cyan)"},
+                      {n:"2",title:"Run it",body:"node sap-proxy-server.js — listens on port 3100. Runs on Windows, Mac, Linux.",color:"var(--green)"},
+                      {n:"3",title:"Set Proxy Mode",body:"Edit your connection → set mode to Proxy and enter http://localhost:3100.",color:"var(--yellow)"},
+                    ].map(s=>(
+                      <div key={s.n} style={{background:"var(--bg3)",border:"1px solid var(--bd)",borderRadius:10,padding:"14px"}}>
+                        <div style={{width:24,height:24,borderRadius:"50%",background:`${s.color}22`,border:`1px solid ${s.color}44`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:700,color:s.color,marginBottom:8,fontFamily:"var(--mono)"}}>{s.n}</div>
+                        <div style={{fontSize:12,fontWeight:700,color:"var(--txt)",fontFamily:"var(--display)",marginBottom:4}}>{s.title}</div>
+                        <div style={{fontSize:11,color:"var(--txt3)",lineHeight:1.5}}>{s.body}</div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div style={{background:"var(--bg3)",border:"1px solid var(--bd)",borderRadius:10,padding:"14px",marginBottom:16}}>
+                    <div style={{fontSize:10,color:"var(--txt3)",fontWeight:700,letterSpacing:"0.1em",textTransform:"uppercase",fontFamily:"var(--display)",marginBottom:8}}>Quick Start Commands</div>
+                    {[
+                      ["Download & run (one line)","node sap-proxy-server.js"],
+                      ["Custom port","PORT=3101 node sap-proxy-server.js"],
+                      ["Verify proxy is running","curl http://localhost:3100/health"],
+                      ["Test connection through proxy","Click Test Connection in the form above"],
+                    ].map(([l,v])=>(
+                      <div key={l} style={{display:"flex",gap:14,alignItems:"baseline",marginBottom:6}}>
+                        <span style={{fontSize:10.5,color:"var(--txt3)",width:200,flexShrink:0}}>{l}</span>
+                        <code style={{fontSize:11,color:"var(--green2)",background:"var(--bg)",padding:"2px 8px",borderRadius:5,border:"1px solid var(--bd)"}}>{v}</code>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div style={{display:"flex",gap:10,flexWrap:"wrap",alignItems:"center"}}>
+                    <button onClick={downloadProxy} style={{display:"flex",alignItems:"center",gap:7,padding:"9px 18px",background:"rgba(16,201,138,.1)",border:"1px solid rgba(16,201,138,.3)",borderRadius:9,color:"var(--green2)",fontWeight:700,fontSize:13,cursor:"pointer"}}>
+                      <Icons.Download size={14}/>Download sap-proxy-server.js
+                    </button>
+                    <div style={{fontSize:11,color:"var(--txt4)"}}>No npm install needed · Pure Node.js · ~150 lines</div>
+                  </div>
+
+                  <div style={{marginTop:14,padding:"10px 14px",background:"rgba(245,197,66,.06)",border:"1px solid rgba(245,197,66,.2)",borderRadius:9}}>
+                    <div style={{fontSize:11.5,color:"var(--yellow2)",fontWeight:600,marginBottom:3}}>Alternative: Configure SAP to send CORS headers</div>
+                    <div style={{fontSize:11,color:"var(--txt3)",lineHeight:1.6}}>
+                      In SAP ICM (transaction SMICM), add response headers:<br/>
+                      <code style={{color:"var(--green2)",fontSize:10.5}}>Access-Control-Allow-Origin: *</code> and <code style={{color:"var(--green2)",fontSize:10.5}}>Access-Control-Allow-Headers: Authorization,Content-Type</code><br/>
+                      Then switch the connection mode to <strong style={{color:"var(--txt)"}}>Direct</strong>. Only do this on dev systems.
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* ══ CONTROLS CONFIG ═══════════════════════════════ */}
+            {view==="controls" && (
+              <div className="fade-up">
+                {/* Header actions */}
+                <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:18,flexWrap:"wrap"}}>
+                  <div style={{position:"relative",flex:1,minWidth:200}}>
+                    <Icons.Filter size={13} cls="" style={{}} />
+                    <div style={{position:"absolute",left:11,top:"50%",transform:"translateY(-50%)",color:"var(--txt3)",pointerEvents:"none"}}><Icons.Filter size={13}/></div>
+                    <input style={{paddingLeft:34,background:"var(--bg3)",border:"1px solid var(--bd2)",borderRadius:9,height:36}} value={ctrlSearch} onChange={e=>setCtrlSearch(e.target.value)} placeholder="Search controls by name or table…"/>
+                  </div>
+                  <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
+                    {ctrlCats.map(cat=>(
+                      <button key={cat} onClick={()=>setCtrlCat(cat)} style={{padding:"5px 11px",borderRadius:20,border:`1px solid ${ctrlCatFilter===cat?"rgba(0,212,255,.4)":"var(--bd)"}`,background:ctrlCatFilter===cat?"rgba(0,212,255,.1)":"transparent",color:ctrlCatFilter===cat?"var(--cyan)":"var(--txt3)",fontSize:11,fontWeight:ctrlCatFilter===cat?700:400,cursor:"pointer"}}>
+                        {cat}
+                      </button>
+                    ))}
+                  </div>
+                  <button onClick={()=>setEditCtrl({new:true})} style={{display:"flex",alignItems:"center",gap:7,padding:"8px 16px",background:"rgba(168,85,247,.1)",border:"1px solid rgba(168,85,247,.3)",borderRadius:9,color:"#a855f7",fontSize:12.5,fontWeight:700,flexShrink:0}}><Icons.Plus size={13}/>Add Custom Control</button>
+                </div>
+
+                {/* New/Edit form */}
+                {editCtrl && (
+                  <ControlForm initial={editCtrl.new?null:editCtrl} onSave={saveCtrl} onCancel={()=>setEditCtrl(null)}/>
+                )}
+
+                {/* Stats strip */}
+                <div style={{display:"flex",gap:14,marginBottom:16,padding:"12px 16px",background:"var(--bg2)",border:"1px solid var(--bd)",borderRadius:10}}>
+                  {[
+                    {l:"Total Controls", v:controls.length, c:"var(--cyan)"},
+                    {l:"Enabled", v:controls.filter(c=>c.enabled).length, c:"var(--green)"},
+                    {l:"Disabled", v:controls.filter(c=>!c.enabled).length, c:"var(--txt3)"},
+                    {l:"Built-in", v:controls.filter(c=>c.builtIn).length, c:"var(--blue)"},
+                    {l:"Custom", v:controls.filter(c=>!c.builtIn).length, c:"#a855f7"},
+                  ].map(k=>(
+                    <div key={k.l} style={{display:"flex",gap:8,alignItems:"center"}}>
+                      <span style={{fontFamily:"var(--mono)",fontWeight:700,fontSize:18,color:k.c,lineHeight:1}}>{k.v}</span>
+                      <span style={{fontSize:11,color:"var(--txt3)"}}>{k.l}</span>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Controls list */}
+                <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                  {filteredCtrl.map(ctrl=>{
+                    const sc=s(ctrl.severity);
+                    return (
+                      <div key={ctrl.id} style={{borderRadius:12,border:`1px solid ${ctrl.enabled?sc.bd:"var(--bd)"}`,background:ctrl.enabled?sc.bg:"var(--bg2)",transition:"all .15s",opacity:ctrl.enabled?1:0.55}}>
+                        <div style={{padding:"13px 16px",display:"flex",alignItems:"center",gap:12}}>
+                          {/* Toggle */}
+                          <button onClick={()=>toggleCtrl(ctrl.id)} style={{width:36,height:20,borderRadius:10,border:"none",background:ctrl.enabled?"var(--green)":"var(--bd2)",cursor:"pointer",flexShrink:0,position:"relative",transition:"all .2s"}}>
+                            <div style={{width:16,height:16,borderRadius:"50%",background:"white",position:"absolute",top:2,left:ctrl.enabled?18:2,transition:"all .2s",boxShadow:"0 1px 4px rgba(0,0,0,.4)"}}/>
+                          </button>
+                          {/* Info */}
+                          <div style={{flex:1,minWidth:0}}>
+                            <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+                              <span style={{fontFamily:"var(--display)",fontWeight:700,fontSize:13,color:"var(--txt)"}}>{ctrl.name}</span>
+                              {ctrl.builtIn && <SevTag v="BUILT-IN" sm/>}
+                              {!ctrl.builtIn && <SevTag v="CUSTOM" sm/>}
+                              <SevTag v={ctrl.severity} sm/>
+                              <span style={{fontSize:10.5,color:"var(--txt3)",fontFamily:"var(--mono)"}}>{ctrl.cat}</span>
+                            </div>
+                            <div style={{fontSize:11,color:"var(--txt3)",marginTop:3,fontFamily:"var(--mono)"}}>
+                              <span style={{color:"#4d8fa0"}}>{ctrl.table}</span> · <span style={{color:"var(--txt4)"}}>{ctrl.entity}</span>
+                              {ctrl.sapNote&&ctrl.sapNote!=="N/A"&&<> · Note <span style={{color:"var(--blue2)"}}>{ctrl.sapNote}</span></>}
+                            </div>
+                            {/* Conditions pills */}
+                            <div style={{display:"flex",gap:5,flexWrap:"wrap",marginTop:6}}>
+                              {ctrl.conditions.map((c,i)=>(
+                                <span key={i} style={{background:"var(--bg4)",border:"1px solid var(--bd)",borderRadius:5,padding:"2px 8px",fontSize:10,color:"var(--txt3)",fontFamily:"var(--mono)"}}>
+                                  <span style={{color:"var(--txt4)"}}>IF </span>{c.label}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                          {/* Actions */}
+                          <div style={{display:"flex",gap:5,flexShrink:0}}>
+                            <button onClick={()=>setEditCtrl({...ctrl})} style={{padding:"6px 10px",background:"var(--bg3)",border:"1px solid var(--bd2)",borderRadius:7,color:"var(--txt2)",fontSize:11,display:"flex",alignItems:"center",gap:4}}><Icons.Edit size={12}/>{ctrl.builtIn?"Config":"Edit"}</button>
+                            {!ctrl.builtIn && (
+                              <button onClick={()=>deleteCtrl(ctrl.id)} style={{padding:"6px 8px",background:"transparent",border:"1px solid transparent",borderRadius:7,color:"var(--txt3)"}} onMouseEnter={e=>{e.currentTarget.style.color="var(--red)";e.currentTarget.style.background="rgba(240,64,64,.08)";}} onMouseLeave={e=>{e.currentTarget.style.color="var(--txt3)";e.currentTarget.style.background="transparent";}}><Icons.Trash size={12}/></button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {filteredCtrl.length===0 && (
+                    <div style={{textAlign:"center",padding:"48px 0",color:"var(--txt3)",fontSize:13}}>No controls match your filter.</div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* ══ ANALYSIS ══════════════════════════════════════ */}
+            {view==="analysis" && (
+              <div className="fade-up" style={{display:"grid",gridTemplateColumns:"1fr 260px",gap:20}}>
+                <div>
+                  <div style={{fontFamily:"var(--display)",fontWeight:700,fontSize:11.5,color:"var(--txt3)",textTransform:"uppercase",letterSpacing:"0.09em",marginBottom:14}}>
+                    {controls.filter(c=>c.enabled).length} Controls Selected — Click to Toggle
+                  </div>
+                  {[...new Set(controls.map(c=>c.cat))].map(cat=>(
+                    <div key={cat} style={{marginBottom:18}}>
+                      <div style={{fontSize:9.5,color:"var(--txt3)",textTransform:"uppercase",letterSpacing:"0.12em",marginBottom:7,fontFamily:"var(--display)",fontWeight:700,paddingLeft:2}}>{cat}</div>
+                      <div style={{display:"flex",flexDirection:"column",gap:5}}>
+                        {controls.filter(c=>c.cat===cat).map(ctrl=>{
+                          const sc=s(ctrl.severity);
+                          const isRun=running&&curCheck===ctrl.id;
+                          const isDone=results&&ctrl.resultKey in results;
+                          return (
+                            <div key={ctrl.id} onClick={()=>toggleCtrl(ctrl.id)} style={{display:"flex",alignItems:"center",gap:11,padding:"10px 14px",borderRadius:10,border:`1px solid ${ctrl.enabled?sc.bd:"var(--bd)"}`,background:ctrl.enabled?sc.bg:"var(--bg2)",cursor:"pointer",transition:"all .15s",opacity:1}}>
+                              <div style={{width:18,height:18,borderRadius:5,border:`2px solid ${ctrl.enabled?"var(--cyan)":"var(--bd2)"}`,background:ctrl.enabled?"var(--cyan)":"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,transition:"all .15s"}}>
+                                {ctrl.enabled && <Icons.Check size={10} cls="" style={{strokeWidth:3,color:"#000"}}/>}
+                              </div>
+                              <div style={{flex:1}}>
+                                <div style={{fontSize:12.5,fontWeight:500,color:ctrl.enabled?"var(--txt)":"var(--txt2)",fontFamily:"var(--display)"}}>{ctrl.name}</div>
+                                <div style={{fontSize:10,color:"var(--txt3)",fontFamily:"var(--mono)",marginTop:1}}>{ctrl.table} · {ctrl.entity}</div>
+                              </div>
+                              <SevTag v={ctrl.severity} sm/>
+                              {isRun&&<Icons.Loader size={13} cls="spin-icon" style={{color:"var(--cyan)"}}/>}
+                              {isDone&&!isRun&&<Icons.Check size={13} cls="" style={{color:"var(--green)"}}/>}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
+                  <div style={{display:"flex",gap:8,marginTop:8}}>
+                    <button onClick={runAnalysis} disabled={running||!activeConn} style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",gap:8,padding:"13px",borderRadius:10,background:running||!activeConn?"var(--bg3)":"var(--cyan)",color:running||!activeConn?"var(--txt3)":"#000",fontWeight:800,fontSize:14,fontFamily:"var(--display)",cursor:running||!activeConn?"not-allowed":"pointer",transition:"all .2s"}}>
+                      {running?<><Icons.Loader size={15} cls="spin-icon"/>Analyzing… {progress}%</>:<><Icons.Play size={15}/>Run Security Analysis</>}
+                    </button>
+                    <button onClick={()=>setControls(p=>p.map(c=>({...c,enabled:true})))} style={{padding:"13px 14px",borderRadius:10,border:"1px solid var(--bd2)",background:"var(--bg3)",color:"var(--txt2)",fontSize:12}}>All</button>
+                    <button onClick={()=>setControls(p=>p.map(c=>({...c,enabled:false})))} style={{padding:"13px 14px",borderRadius:10,border:"1px solid var(--bd2)",background:"var(--bg3)",color:"var(--txt2)",fontSize:12}}>None</button>
+                  </div>
+                  {running&&<div style={{marginTop:10,height:3,background:"var(--bd)",borderRadius:3,overflow:"hidden"}}><div style={{height:"100%",background:"linear-gradient(90deg,var(--cyan),var(--blue))",borderRadius:3,width:`${progress}%`,transition:"width .5s ease"}}/></div>}
+                </div>
+                {/* Right panel */}
+                <div style={{display:"flex",flexDirection:"column",gap:12}}>
+                  <div style={{background:"var(--bg2)",border:"1px solid var(--bd)",borderRadius:12,padding:16}}>
+                    <div style={{fontFamily:"var(--display)",fontWeight:700,fontSize:10,color:"var(--txt3)",textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:12}}>Active Connection</div>
+                    {conn?([["System",conn.name],["Host",conn.host],["Port",conn.port],["SID",conn.sid],["Client",conn.client],["User",conn.user]].map(([k,v])=>(
+                      <div key={k} style={{display:"flex",justifyContent:"space-between",fontSize:11.5,marginBottom:6}}>
+                        <span style={{color:"var(--txt3)"}}>{k}</span>
+                        <span style={{color:"var(--txt2)",fontFamily:"var(--mono)"}}>{v||"—"}</span>
+                      </div>
+                    ))):<p style={{color:"var(--txt3)",fontSize:12}}>No connection selected.</p>}
+                  </div>
+                  <div style={{background:"var(--bg2)",border:"1px solid var(--bd)",borderRadius:12,padding:16}}>
+                    <div style={{fontFamily:"var(--display)",fontWeight:700,fontSize:10,color:"var(--txt3)",textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:10}}>Summary</div>
+                    {[["Enabled Controls",controls.filter(c=>c.enabled).length],["Custom Controls",controls.filter(c=>!c.builtIn).length],["Conditions Total",controls.reduce((a,c)=>a+c.conditions.length,0)]].map(([k,v])=>(
+                      <div key={k} style={{display:"flex",justifyContent:"space-between",fontSize:11.5,marginBottom:6}}>
+                        <span style={{color:"var(--txt3)"}}>{k}</span>
+                        <span style={{color:"var(--cyan)",fontFamily:"var(--mono)",fontWeight:700}}>{v}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* ══ RESULTS ═══════════════════════════════════════ */}
+            {view==="results" && (
+              results ? (
+                <div className="fade-up">
+                  {/* KPI strip */}
+                  <div style={{display:"grid",gridTemplateColumns:"repeat(6,1fr)",gap:11,marginBottom:22}}>
+                    {kpis.map(k=>(
+                      <div key={k.l} style={{background:"var(--bg2)",border:"1px solid var(--bd)",borderRadius:10,padding:"13px 14px",textAlign:"center"}}>
+                        <div style={{fontSize:34,fontWeight:700,fontFamily:"var(--mono)",color:k.c,lineHeight:1,marginBottom:5}}>{k.v}</div>
+                        <div style={{fontSize:9.5,color:"var(--txt3)",textTransform:"uppercase",letterSpacing:"0.08em",fontFamily:"var(--display)",fontWeight:700}}>{k.l}</div>
+                      </div>
+                    ))}
+                  </div>
+                  {/* PDF export top */}
+                  <div style={{display:"flex",justifyContent:"flex-end",marginBottom:16}}>
+                    <button onClick={exportPDF} disabled={pdfLoading} style={{display:"flex",alignItems:"center",gap:7,padding:"9px 20px",background:pdfLoading?"var(--bg4)":"rgba(240,64,64,.12)",border:`1px solid ${pdfLoading?"var(--bd2)":"rgba(240,64,64,.3)"}`,borderRadius:9,color:pdfLoading?"var(--txt3)":"var(--red2)",fontWeight:700,fontSize:13,cursor:pdfLoading?"not-allowed":"pointer"}}>
+                      {pdfLoading?<><Icons.Loader size={14} cls="spin-icon"/>Generating PDF…</>:<><Icons.PDF size={14}/>Download PDF Report</>}
+                    </button>
+                  </div>
+                  {/* All result sections */}
+                  {controls.filter(c=>c.enabled&&results[c.resultKey]&&Array.isArray(results[c.resultKey])&&results[c.resultKey].length>0).map(ctrl=>(
+                    <ResSection key={ctrl.id} ctrl={ctrl} data={results[ctrl.resultKey]}/>
+                  ))}
+                  {/* params (special) */}
+                  {results.securityParams&&results.securityParams.length>0&&!controls.find(c=>c.id==="params"&&c.enabled)&&(
+                    <ResSection ctrl={controls.find(c=>c.id==="params")||{name:"Security Parameters",table:"PAHI",entity:"",severity:"WARN",desc:"",conditions:[],resultKey:"securityParams",benchmark:""}} data={results.securityParams}/>
+                  )}
+                  <div style={{display:"flex",justifyContent:"flex-end",marginTop:10}}>
+                    <button onClick={exportPDF} disabled={pdfLoading} style={{display:"flex",alignItems:"center",gap:7,padding:"11px 24px",background:pdfLoading?"var(--bg4)":"var(--red)",color:"#fff",borderRadius:10,fontWeight:700,fontSize:14,cursor:pdfLoading?"not-allowed":"pointer",opacity:pdfLoading?0.6:1}}>
+                      {pdfLoading?<><Icons.Loader size={15} cls="spin-icon"/>Generating…</>:<><Icons.PDF size={15}/>Download PDF Report</>}
+                    </button>
+                  </div>
+                </div>
+              ):(
+                <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",height:400,gap:12}}>
+                  <Icons.BarChart size={44} cls="" style={{color:"var(--txt3)",opacity:.3}}/>
+                  <h2 style={{fontFamily:"var(--display)",fontSize:18,fontWeight:800,color:"var(--txt)",margin:0}}>No Results Yet</h2>
+                  <p style={{color:"var(--txt3)",fontSize:13,margin:0}}>Run the analysis to see findings here.</p>
+                  <button onClick={()=>setView("analysis")} style={{display:"flex",alignItems:"center",gap:7,padding:"10px 20px",background:"var(--bg3)",border:"1px solid var(--bd2)",borderRadius:9,color:"var(--txt2)",fontSize:13,fontWeight:600,marginTop:8}}><Icons.Play size={13}/>Go to Analysis</button>
+                </div>
+              )
+            )}
+
+            {/* ══ LOG ═══════════════════════════════════════════ */}
+            {view==="log" && (
+              <div className="fade-up">
+                <div style={{background:"var(--bg2)",border:"1px solid var(--bd)",borderRadius:12,overflow:"hidden"}}>
+                  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"11px 16px",borderBottom:"1px solid var(--bd)",background:"var(--bg3)"}}>
+                    <span style={{fontFamily:"var(--mono)",fontSize:12,fontWeight:600,color:"var(--txt2)",letterSpacing:"0.05em"}}>EXECUTION LOG</span>
+                    <div style={{display:"flex",gap:10,alignItems:"center"}}>
+                      <span style={{fontSize:10.5,color:"var(--txt3)",fontFamily:"var(--mono)"}}>{log.length} entries · {log.filter(l=>l.type==="warn").length} warnings</span>
+                      <button onClick={()=>setLog([])} style={{padding:"3px 10px",borderRadius:6,background:"transparent",border:"1px solid var(--bd2)",color:"var(--txt3)",fontSize:11,cursor:"pointer"}}>Clear</button>
+                    </div>
+                  </div>
+                  <div style={{padding:16,fontFamily:"var(--mono)",fontSize:11.5,maxHeight:550,overflowY:"auto",background:"var(--bg)"}}>
+                    {log.length===0
+                      ?<p style={{color:"var(--txt3)",textAlign:"center",padding:"48px 0",fontFamily:"var(--font)"}}>No log entries. Run analysis to see output.</p>
+                      :log.map((l,i)=>(
+                        <div key={i} style={{display:"flex",gap:12,padding:"3.5px 0",borderBottom:"1px solid rgba(30,45,68,.3)"}}>
+                          <span style={{color:"var(--txt4)",flexShrink:0,fontSize:10.5}}>{l.ts}</span>
+                          <span style={{color:l.type==="error"?"var(--red)":l.type==="warn"?"var(--yellow)":l.type==="success"?"var(--green)":"var(--txt2)"}}>{l.msg}</span>
+                        </div>
+                      ))
+                    }
+                  </div>
+                </div>
+              </div>
+            )}
+
+          </div>
+        </div>
+      </div>
+
+      {proxyError && <ProxySetupModal err={proxyError} onClose={()=>setProxyError(null)}/>}
+
+      {/* ══ TOAST ═══════════════════════════════════════════════════ */}
+      {toast && (
+        <div style={{position:"fixed",bottom:22,right:22,zIndex:9999,display:"flex",alignItems:"center",gap:10,padding:"11px 17px",borderRadius:12,
+          background:toast.type==="success"?"rgba(16,201,138,.1)":toast.type==="error"?"rgba(240,64,64,.1)":toast.type==="warn"?"rgba(245,197,66,.1)":"rgba(59,130,246,.1)",
+          border:`1px solid ${toast.type==="success"?"rgba(16,201,138,.3)":toast.type==="error"?"rgba(240,64,64,.3)":toast.type==="warn"?"rgba(245,197,66,.3)":"rgba(59,130,246,.3)"}`,
+          color:toast.type==="success"?"var(--green2)":toast.type==="error"?"var(--red2)":toast.type==="warn"?"var(--yellow2)":"var(--blue2)",
+          fontSize:13,fontWeight:600,backdropFilter:"blur(12px)",animation:"fadeUp .25s ease",boxShadow:"0 8px 32px rgba(0,0,0,.5)"}}>
+          {toast.type==="success"?<Icons.Check size={14}/>:toast.type==="error"?<Icons.X size={14}/>:<Icons.Alert size={14}/>}
+          {toast.msg}
+        </div>
+      )}
+    </>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+
+  </script>
+</body>
+</html>
